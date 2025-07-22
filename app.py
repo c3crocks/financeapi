@@ -172,7 +172,6 @@ except Exception as e:
 
 # Options code
 # Get available expiration dates
-# Get the most recent closing price
 try:
     # Get nearest expiration
     expirations = stock.options
@@ -205,4 +204,16 @@ try:
         put_pct_change = -sim_change * option_leverage
 
         call_price = (atm_call['bid'] + atm_call['ask']) / 2
-        put_price =_
+        put_price = (atm_put['bid'] + atm_put['ask']) / 2
+
+        call_estimated = call_price * (1 + call_pct_change / 100)
+        put_estimated = put_price * (1 + put_pct_change / 100)
+
+        st.markdown(f"📈 **If stock changes by `{sim_change:.1f}%`, then:**")
+        st.success(f"💰 Call: `{call_pct_change:.1f}%` → ${call_estimated:.2f}")
+        st.error(f"📉 Put: `{put_pct_change:.1f}%` → ${put_estimated:.2f}")
+
+    else:
+        st.warning("No option chain available for this ticker.")
+except Exception as e:
+    st.error(f"Failed to simulate options sensitivity: {e}")
