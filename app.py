@@ -60,6 +60,24 @@ else:
     st.info("Enter a ticker and set your NewsAPI key to begin.")
 
 
+st.subheader(f"📊 Price Chart for {ticker.upper()}")
+
+try:
+    stock = yf.Ticker(ticker)
+    hist = stock.history(period="6mo")  # Last 6 months
+
+    if hist.empty:
+        st.warning("No price data found for this ticker.")
+    else:
+        fig, ax = plt.subplots()
+        ax.plot(hist.index, hist["Close"], label="Closing Price")
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Price (USD)")
+        ax.set_title(f"{ticker.upper()} - Last 6 Months")
+        ax.legend()
+        st.pyplot(fig)
+except Exception as e:
+    st.error(f"Failed to fetch or display chart: {e}")
 
 
 st.subheader(f"📊 Technical Chart for {ticker.upper()}")
