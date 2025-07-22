@@ -3,6 +3,8 @@ import requests
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import yfinance as yf
+import matplotlib.pyplot as plt
+
 
 # Load FinBERT model
 @st.cache_resource
@@ -56,3 +58,21 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
         st.success(f"### 📊 Recommendation: **{recommendation}**")
 else:
     st.info("Enter a ticker and set your NewsAPI key to begin.")
+st.subheader(f"📊 Price Chart for {ticker.upper()}")
+
+try:
+    stock = yf.Ticker(ticker)
+    hist = stock.history(period="6mo")  # Last 6 months
+
+    if hist.empty:
+        st.warning("No price data found for this ticker.")
+    else:
+        fig, ax = plt.subplots()
+        ax.plot(hist.index, hist["Close"], label="Closing Price")
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Price (USD)")
+        ax.set_title(f"{ticker.upper()} - Last 6 Months")
+        ax.legend()
+        st.pyplot(fig)
+except Exception as e:
+    st.error(f"Failed to fetch or display chart: {e}")
