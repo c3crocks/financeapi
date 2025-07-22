@@ -3,4 +3,5 @@ transformers
 torch
 requests
 yfinance
+pandas
 matplotlib

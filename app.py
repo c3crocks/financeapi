@@ -4,7 +4,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import yfinance as yf
 import matplotlib.pyplot as plt
-
+import pandas as pd
 
 # Load FinBERT model
 @st.cache_resource
@@ -58,21 +58,66 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
         st.success(f"### 📊 Recommendation: **{recommendation}**")
 else:
     st.info("Enter a ticker and set your NewsAPI key to begin.")
-st.subheader(f"📊 Price Chart for {ticker.upper()}")
+
+
+
+
+st.subheader(f"📊 Technical Chart for {ticker.upper()}")
 
 try:
     stock = yf.Ticker(ticker)
-    hist = stock.history(period="6mo")  # Last 6 months
+    hist = stock.history(period="6mo")
 
     if hist.empty:
         st.warning("No price data found for this ticker.")
     else:
-        fig, ax = plt.subplots()
-        ax.plot(hist.index, hist["Close"], label="Closing Price")
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Price (USD)")
-        ax.set_title(f"{ticker.upper()} - Last 6 Months")
-        ax.legend()
+        df = hist.copy()
+
+        # --- Moving Average ---
+        df["MA20"] = df["Close"].rolling(window=20).mean()
+
+        # --- RSI Calculation ---
+        delta = df["Close"].diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+        rs = avg_gain / avg_loss
+        df["RSI"] = 100 - (100 / (1 + rs))
+
+        # --- MACD Calculation ---
+        exp1 = df["Close"].ewm(span=12, adjust=False).mean()
+        exp2 = df["Close"].ewm(span=26, adjust=False).mean()
+        df["MACD"] = exp1 - exp2
+        df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
+
+        # --- Plotting ---
+        fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+
+        # Price and MA
+        axs[0].plot(df.index, df["Close"], label="Close Price")
+        axs[0].plot(df.index, df["MA20"], label="MA20", linestyle="--")
+        axs[0].set_ylabel("Price")
+        axs[0].legend()
+        axs[0].set_title(f"{ticker.upper()} Price & MA")
+
+        # RSI
+        axs[1].plot(df.index, df["RSI"], color="orange", label="RSI")
+        axs[1].axhline(70, color='red', linestyle='--')
+        axs[1].axhline(30, color='green', linestyle='--')
+        axs[1].set_ylabel("RSI")
+        axs[1].legend()
+        axs[1].set_title("Relative Strength Index (RSI)")
+
+        # MACD
+        axs[2].plot(df.index, df["MACD"], label="MACD", color="blue")
+        axs[2].plot(df.index, df["Signal"], label="Signal", color="magenta")
+        axs[2].axhline(0, color='black', linestyle='--')
+        axs[2].set_ylabel("MACD")
+        axs[2].legend()
+        axs[2].set_title("MACD")
+
         st.pyplot(fig)
+
 except Exception as e:
     st.error(f"Failed to fetch or display chart: {e}")
