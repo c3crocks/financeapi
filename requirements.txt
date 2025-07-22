@@ -6,3 +6,4 @@ yfinance
 pandas
 matplotlib
 prophet
+plotly
