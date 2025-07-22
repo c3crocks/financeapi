@@ -169,3 +169,27 @@ try:
 
 except Exception as e:
     st.error(f"Failed to generate forecast: {e}")
+
+# Options code
+# Get available expiration dates
+expirations = stock.options
+if len(expirations) > 0:
+    nearest_expiry = expirations[0]  # Pick nearest expiry
+    opt_chain = stock.option_chain(nearest_expiry)
+    calls = opt_chain.calls
+    puts = opt_chain.puts
+
+    # Find ATM (at-the-money) strike
+    current_price = hist["Close"][-1]
+    calls["diff"] = abs(calls["strike"] - current_price)
+    puts["diff"] = abs(puts["strike"] - current_price)
+    atm_call = calls.sort_values("diff").iloc[0]
+    atm_put = puts.sort_values("diff").iloc[0]
+
+    st.subheader("🔄 Option Price Sensitivity")
+    st.markdown(f"**Nearest Expiry:** `{nearest_expiry}`")
+    st.markdown(f"**Stock Price:** ${current_price:.2f}")
+    st.markdown(f"**ATM Call ({atm_call['strike']}$):** Bid ${atm_call['bid']} / Ask ${atm_call['ask']}")
+    st.markdown(f"**ATM Put ({atm_put['strike']}$):** Bid ${atm_put['bid']} / Ask ${atm_put['ask']}")
+else:
+    st.warning("No option chain available.")
