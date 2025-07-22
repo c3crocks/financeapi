@@ -172,6 +172,9 @@ except Exception as e:
 
 # Options code
 # Get available expiration dates
+# Get the most recent closing price
+current_price = hist["Close"][-1]
+
 st.subheader("🔁 Simulated Option Price Sensitivity")
 
 sim_change = st.slider("Simulate Stock Price Change (%)", min_value=-5.0, max_value=5.0, value=1.0, step=0.5)
@@ -191,4 +194,3 @@ st.markdown(f"📈 **If stock changes by `{sim_change:.1f}%`, then:**")
 
 st.info(f"💰 **Call ({atm_call['strike']}$):** would change by `{call_pct_change:.1f}%` → Estimated price: `${call_estimated_price:.2f}`")
 st.info(f"📉 **Put ({atm_put['strike']}$):** would change by `{put_pct_change:.1f}%` → Estimated price: `${put_estimated_price:.2f}`")
-
