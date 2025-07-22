@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from prophet import Prophet
 from prophet.plot import plot_plotly
+import plotly.graph_objects as go
+
 
 # Load FinBERT model
 @st.cache_resource
