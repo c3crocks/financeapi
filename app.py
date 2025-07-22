@@ -148,6 +148,8 @@ try:
     df = stock.history(period="1y")
     df = df[["Close"]].reset_index()
     df = df.rename(columns={"Date": "ds", "Close": "y"})
+    df["ds"] = df["ds"].dt.tz_localize(None)  
+
 
     model = Prophet(daily_seasonality=True)
     model.fit(df)
