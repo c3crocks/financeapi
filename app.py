@@ -187,8 +187,12 @@ option_leverage = 5
 call_pct_change = sim_change * option_leverage
 put_pct_change = -sim_change * option_leverage
 
-call_estimated_price = atm_call['lastPrice'] * (1 + call_pct_change / 100)
-put_estimated_price = atm_put['lastPrice'] * (1 + put_pct_change / 100)
+call_price = (atm_call['bid'] + atm_call['ask']) / 2
+put_price = (atm_put['bid'] + atm_put['ask']) / 2
+
+call_estimated_price = call_price * (1 + call_pct_change / 100)
+put_estimated_price = put_price * (1 + put_pct_change / 100)
+
 
 st.markdown(f"📈 **If stock changes by `{sim_change:.1f}%`, then:**")
 
