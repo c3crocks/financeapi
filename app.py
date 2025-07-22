@@ -5,6 +5,8 @@ import torch
 import yfinance as yf
 import matplotlib.pyplot as plt
 import pandas as pd
+from prophet import Prophet
+from prophet.plot import plot_plotly
 
 # Load FinBERT model
 @st.cache_resource
@@ -139,3 +141,27 @@ try:
 
 except Exception as e:
     st.error(f"Failed to fetch or display chart: {e}")
+#Forecasting code
+st.subheader(f"🔮 7-Day Forecast for {ticker.upper()}")
+
+try:
+    df = stock.history(period="1y")
+    df = df[["Close"]].reset_index()
+    df = df.rename(columns={"Date": "ds", "Close": "y"})
+
+    model = Prophet(daily_seasonality=True)
+    model.fit(df)
+
+    future = model.make_future_dataframe(periods=7)
+    forecast = model.predict(future)
+
+    # Show forecast data table (optional)
+    st.write("Forecasted Prices:")
+    st.dataframe(forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].tail(7))
+
+    # Plot forecast
+    fig2 = plot_plotly(model, forecast)
+    st.plotly_chart(fig2)
+
+except Exception as e:
+    st.error(f"Failed to generate forecast: {e}")
