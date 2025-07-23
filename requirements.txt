@@ -6,5 +6,7 @@ yfinance
 pandas
 matplotlib
 prophet
+cmdstanpy
 plotly
-BeautifulSoup
+beautifulsoup4
+lxml
