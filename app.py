@@ -58,7 +58,10 @@ st.markdown("""
 st.markdown("<p class='big-font'>AI-Powered Stock Sentiment, Technicals & Forecasting Tool</p>", unsafe_allow_html=True)
 st.markdown("---")
 
-ticker = st.text_input("Enter stock ticker (e.g., AAPL, TSLA, MSFT)", value="AAPL")
+with st.sidebar:
+    st.header("🔍 Stock Selection")
+    ticker = st.text_input("Enter stock ticker", value="AAPL")
+
 newsapi_key = st.secrets.get("newsapi_key", "YOUR_NEWS_API_KEY")
 
 if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
