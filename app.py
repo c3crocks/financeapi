@@ -65,8 +65,13 @@ with st.sidebar:
 newsapi_key = st.secrets.get("newsapi_key", "YOUR_NEWS_API_KEY")
 
 if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
+    stock = yf.Ticker(ticker)
+    hist = stock.history(period="6mo")
 
-    with st.expander("📰 News Sentiment Analysis", expanded=True):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("📰 News Sentiment Analysis")
         headlines = get_news(ticker, newsapi_key)
         sentiments = []
         for h in headlines:
@@ -77,10 +82,8 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
         recommendation = summarize_sentiments(sentiments)
         st.success(f"### 📊 Recommendation: **{recommendation}**")
 
-    with st.expander("📉 Price Chart", expanded=True):
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="6mo")
-
+    with col2:
+        st.subheader("📉 Price Chart")
         if not hist.empty:
             fig, ax = plt.subplots()
             ax.plot(hist.index, hist["Close"], label="Closing Price")
@@ -92,7 +95,10 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
         else:
             st.warning("No price data found for this ticker.")
 
-    with st.expander("📐 Technical Indicators (MA, RSI, MACD)", expanded=False):
+    col3, col4 = st.columns(2)
+
+    with col3:
+        st.subheader("📐 Technical Indicators")
         if not hist.empty:
             df = hist.copy()
             df["MA20"] = df["Close"].rolling(window=20).mean()
@@ -131,7 +137,8 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
 
             st.pyplot(fig)
 
-    with st.expander("🔮 7-Day Forecast", expanded=False):
+    with col4:
+        st.subheader("🔮 7-Day Forecast")
         try:
             df = stock.history(period="1y")
             df = df[["Close"]].reset_index()
@@ -153,46 +160,46 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
         except Exception as e:
             st.error(f"Failed to generate forecast: {e}")
 
-    with st.expander("🧾 Option Chain & Sensitivity", expanded=False):
-        try:
-            expirations = stock.options
-            if expirations:
-                nearest_expiry = expirations[0]
-                opt_chain = stock.option_chain(nearest_expiry)
-                calls = opt_chain.calls
-                puts = opt_chain.puts
+    st.subheader("🧾 Option Chain & Sensitivity")
+    try:
+        expirations = stock.options
+        if expirations:
+            nearest_expiry = expirations[0]
+            opt_chain = stock.option_chain(nearest_expiry)
+            calls = opt_chain.calls
+            puts = opt_chain.puts
 
-                current_price = hist["Close"][-1]
-                calls["diff"] = abs(calls["strike"] - current_price)
-                puts["diff"] = abs(puts["strike"] - current_price)
-                atm_call = calls.sort_values("diff").iloc[0]
-                atm_put = puts.sort_values("diff").iloc[0]
+            current_price = hist["Close"][-1]
+            calls["diff"] = abs(calls["strike"] - current_price)
+            puts["diff"] = abs(puts["strike"] - current_price)
+            atm_call = calls.sort_values("diff").iloc[0]
+            atm_put = puts.sort_values("diff").iloc[0]
 
-                st.markdown(f"**Stock Price:** ${current_price:.2f}")
-                st.markdown(f"**ATM Call Strike:** ${atm_call['strike']} — Bid: ${atm_call['bid']}, Ask: ${atm_call['ask']}")
-                st.markdown(f"**ATM Put Strike:** ${atm_put['strike']} — Bid: ${atm_put['bid']}, Ask: ${atm_put['ask']}")
+            st.markdown(f"**Stock Price:** ${current_price:.2f}")
+            st.markdown(f"**ATM Call Strike:** ${atm_call['strike']} — Bid: ${atm_call['bid']}, Ask: ${atm_call['ask']}")
+            st.markdown(f"**ATM Put Strike:** ${atm_put['strike']} — Bid: ${atm_put['bid']}, Ask: ${atm_put['ask']}")
 
-                st.markdown("#### 🔁 Simulate Option Sensitivity")
-                sim_change = st.slider("Simulate Stock Price Change (%)", -5.0, 5.0, 1.0, step=0.5)
+            st.markdown("#### 🔁 Simulate Option Sensitivity")
+            sim_change = st.slider("Simulate Stock Price Change (%)", -5.0, 5.0, 1.0, step=0.5)
 
-                option_leverage = 5
-                call_pct_change = sim_change * option_leverage
-                put_pct_change = -sim_change * option_leverage
+            option_leverage = 5
+            call_pct_change = sim_change * option_leverage
+            put_pct_change = -sim_change * option_leverage
 
-                call_price = (atm_call['bid'] + atm_call['ask']) / 2
-                put_price = (atm_put['bid'] + atm_put['ask']) / 2
+            call_price = (atm_call['bid'] + atm_call['ask']) / 2
+            put_price = (atm_put['bid'] + atm_put['ask']) / 2
 
-                call_estimated = call_price * (1 + call_pct_change / 100)
-                put_estimated = put_price * (1 + put_pct_change / 100)
+            call_estimated = call_price * (1 + call_pct_change / 100)
+            put_estimated = put_price * (1 + put_pct_change / 100)
 
-                st.success(f"💰 Call Estimate: `{call_pct_change:.1f}%` → ${call_estimated:.2f}")
-                st.error(f"📉 Put Estimate: `{put_pct_change:.1f}%` → ${put_estimated:.2f}")
+            st.success(f"💰 Call Estimate: `{call_pct_change:.1f}%` → ${call_estimated:.2f}")
+            st.error(f"📉 Put Estimate: `{put_pct_change:.1f}%` → ${put_estimated:.2f}")
 
-            else:
-                st.warning("No option chain available for this ticker.")
+        else:
+            st.warning("No option chain available for this ticker.")
 
-        except Exception as e:
-            st.error(f"Failed to simulate options sensitivity: {e}")
+    except Exception as e:
+        st.error(f"Failed to simulate options sensitivity: {e}")
 
 else:
     st.info("Enter a stock ticker and configure your NewsAPI key in secrets to begin.")
