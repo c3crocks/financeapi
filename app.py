@@ -68,138 +68,167 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
     stock = yf.Ticker(ticker)
     hist = stock.history(period="6mo")
 
-    col1, col2 = st.columns(2)
+    tab1, tab2 = st.tabs(["📊 Stock Analysis", "🧾 Options Analysis"])
 
-    with col1:
-        st.subheader("📰 News Sentiment Analysis")
-        headlines = get_news(ticker, newsapi_key)
-        sentiments = []
-        for h in headlines:
-            sent, _ = get_sentiment(h)
-            sentiments.append(sent)
-            st.markdown(f"- **{h}** — *{sent}*")
+    with tab1:
+        col1, col2 = st.columns(2)
 
-        recommendation = summarize_sentiments(sentiments)
-        st.success(f"### 📊 Recommendation: **{recommendation}**")
+        with col1:
+            st.subheader("📰 News Sentiment Analysis")
+            headlines = get_news(ticker, newsapi_key)
+            sentiments = []
+            for h in headlines:
+                sent, _ = get_sentiment(h)
+                sentiments.append(sent)
+                st.markdown(f"- **{h}** — *{sent}*")
 
-    with col2:
-        st.subheader("📉 Price Chart")
-        if not hist.empty:
-            fig, ax = plt.subplots()
-            ax.plot(hist.index, hist["Close"], label="Closing Price")
-            ax.set_xlabel("Date")
-            ax.set_ylabel("Price (USD)")
-            ax.set_title(f"{ticker.upper()} - Last 6 Months")
-            ax.legend()
-            st.pyplot(fig)
-        else:
-            st.warning("No price data found for this ticker.")
+            recommendation = summarize_sentiments(sentiments)
+            st.success(f"### 📊 Recommendation: **{recommendation}**")
 
-    col3, col4 = st.columns(2)
+        with col2:
+            st.subheader("📉 Price Chart")
+            if not hist.empty:
+                fig, ax = plt.subplots()
+                ax.plot(hist.index, hist["Close"], label="Closing Price")
+                ax.set_xlabel("Date")
+                ax.set_ylabel("Price (USD)")
+                ax.set_title(f"{ticker.upper()} - Last 6 Months")
+                ax.legend()
+                st.pyplot(fig)
+            else:
+                st.warning("No price data found for this ticker.")
 
-    with col3:
-        st.subheader("📐 Technical Indicators")
-        if not hist.empty:
-            df = hist.copy()
-            df["MA20"] = df["Close"].rolling(window=20).mean()
-            delta = df["Close"].diff()
-            gain = delta.clip(lower=0)
-            loss = -delta.clip(upper=0)
-            avg_gain = gain.rolling(window=14).mean()
-            avg_loss = loss.rolling(window=14).mean()
-            rs = avg_gain / avg_loss
-            df["RSI"] = 100 - (100 / (1 + rs))
-            exp1 = df["Close"].ewm(span=12, adjust=False).mean()
-            exp2 = df["Close"].ewm(span=26, adjust=False).mean()
-            df["MACD"] = exp1 - exp2
-            df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
+        col3, col4 = st.columns(2)
 
-            fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
-            axs[0].plot(df.index, df["Close"], label="Close Price")
-            axs[0].plot(df.index, df["MA20"], label="MA20", linestyle="--")
-            axs[0].set_ylabel("Price")
-            axs[0].legend()
-            axs[0].set_title(f"{ticker.upper()} Price & MA")
+        with col3:
+            st.subheader("📐 Technical Indicators")
+            if not hist.empty:
+                df = hist.copy()
+                df["MA20"] = df["Close"].rolling(window=20).mean()
+                delta = df["Close"].diff()
+                gain = delta.clip(lower=0)
+                loss = -delta.clip(upper=0)
+                avg_gain = gain.rolling(window=14).mean()
+                avg_loss = loss.rolling(window=14).mean()
+                rs = avg_gain / avg_loss
+                df["RSI"] = 100 - (100 / (1 + rs))
+                exp1 = df["Close"].ewm(span=12, adjust=False).mean()
+                exp2 = df["Close"].ewm(span=26, adjust=False).mean()
+                df["MACD"] = exp1 - exp2
+                df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
 
-            axs[1].plot(df.index, df["RSI"], color="orange", label="RSI")
-            axs[1].axhline(70, color='red', linestyle='--')
-            axs[1].axhline(30, color='green', linestyle='--')
-            axs[1].set_ylabel("RSI")
-            axs[1].legend()
-            axs[1].set_title("Relative Strength Index (RSI)")
+                fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+                axs[0].plot(df.index, df["Close"], label="Close Price")
+                axs[0].plot(df.index, df["MA20"], label="MA20", linestyle="--")
+                axs[0].set_ylabel("Price")
+                axs[0].legend()
+                axs[0].set_title(f"{ticker.upper()} Price & MA")
 
-            axs[2].plot(df.index, df["MACD"], label="MACD", color="blue")
-            axs[2].plot(df.index, df["Signal"], label="Signal", color="magenta")
-            axs[2].axhline(0, color='black', linestyle='--')
-            axs[2].set_ylabel("MACD")
-            axs[2].legend()
-            axs[2].set_title("MACD")
+                axs[1].plot(df.index, df["RSI"], color="orange", label="RSI")
+                axs[1].axhline(70, color='red', linestyle='--')
+                axs[1].axhline(30, color='green', linestyle='--')
+                axs[1].set_ylabel("RSI")
+                axs[1].legend()
+                axs[1].set_title("Relative Strength Index (RSI)")
 
-            st.pyplot(fig)
+                axs[2].plot(df.index, df["MACD"], label="MACD", color="blue")
+                axs[2].plot(df.index, df["Signal"], label="Signal", color="magenta")
+                axs[2].axhline(0, color='black', linestyle='--')
+                axs[2].set_ylabel("MACD")
+                axs[2].legend()
+                axs[2].set_title("MACD")
 
-    with col4:
-        st.subheader("🔮 7-Day Forecast")
+                st.pyplot(fig)
+
+        with col4:
+            st.subheader("🔮 7-Day Forecast")
+            try:
+                df = stock.history(period="1y")
+                df = df[["Close"]].reset_index()
+                df = df.rename(columns={"Date": "ds", "Close": "y"})
+                df["ds"] = df["ds"].dt.tz_localize(None)
+
+                model = Prophet(daily_seasonality=True)
+                model.fit(df)
+
+                future = model.make_future_dataframe(periods=7)
+                forecast = model.predict(future)
+
+                st.write("Forecasted Prices (next 7 days):")
+                st.dataframe(forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].tail(7))
+
+                fig2 = plot_plotly(model, forecast)
+                st.plotly_chart(fig2)
+
+            except Exception as e:
+                st.error(f"Failed to generate forecast: {e}")
+
+    with tab2:
+        st.subheader("🧾 Option Chain & Sensitivity Analysis")
         try:
-            df = stock.history(period="1y")
-            df = df[["Close"]].reset_index()
-            df = df.rename(columns={"Date": "ds", "Close": "y"})
-            df["ds"] = df["ds"].dt.tz_localize(None)
+            expirations = stock.options
+            if expirations:
+                nearest_expiry = expirations[0]
+                opt_chain = stock.option_chain(nearest_expiry)
+                calls = opt_chain.calls
+                puts = opt_chain.puts
 
-            model = Prophet(daily_seasonality=True)
-            model.fit(df)
+                current_price = hist["Close"][-1]
+                calls["diff"] = abs(calls["strike"] - current_price)
+                puts["diff"] = abs(puts["strike"] - current_price)
+                atm_call = calls.sort_values("diff").iloc[0]
+                atm_put = puts.sort_values("diff").iloc[0]
 
-            future = model.make_future_dataframe(periods=7)
-            forecast = model.predict(future)
+                st.markdown(f"**Stock Price:** ${current_price:.2f}")
+                st.markdown(f"**ATM Call Strike:** ${atm_call['strike']} — Bid: ${atm_call['bid']}, Ask: ${atm_call['ask']}")
+                st.markdown(f"**ATM Put Strike:** ${atm_put['strike']} — Bid: ${atm_put['bid']}, Ask: ${atm_put['ask']}")
 
-            st.write("Forecasted Prices (next 7 days):")
-            st.dataframe(forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].tail(7))
+                st.markdown("#### 🔁 Simulate Option Sensitivity")
+                sim_change = st.slider("Simulate Stock Price Change (%)", -5.0, 5.0, 1.0, step=0.5)
 
-            fig2 = plot_plotly(model, forecast)
-            st.plotly_chart(fig2)
+                option_leverage = 5
+                call_pct_change = sim_change * option_leverage
+                put_pct_change = -sim_change * option_leverage
+
+                call_price = (atm_call['bid'] + atm_call['ask']) / 2
+                put_price = (atm_put['bid'] + atm_put['ask']) / 2
+
+                call_estimated = call_price * (1 + call_pct_change / 100)
+                put_estimated = put_price * (1 + put_pct_change / 100)
+
+                st.success(f"💰 Call Estimate: `{call_pct_change:.1f}%` → ${call_estimated:.2f}")
+                st.error(f"📉 Put Estimate: `{put_pct_change:.1f}%` → ${put_estimated:.2f}")
+
+                breakeven_call = atm_call['strike'] + call_price
+                breakeven_put = atm_put['strike'] - put_price
+                st.markdown(f"📌 **Call Breakeven:** ${breakeven_call:.2f}")
+                st.markdown(f"📌 **Put Breakeven:** ${breakeven_put:.2f}")
+
+                if 'impliedVolatility' in atm_call:
+                    st.markdown(f"📈 **Implied Volatility (Call):** {atm_call['impliedVolatility']:.2%}")
+
+                steps = list(range(-5, 6))
+                call_sim = [call_price * (1 + pct * option_leverage / 100) for pct in steps]
+                put_sim = [put_price * (1 - pct * option_leverage / 100) for pct in steps]
+
+                df_sim = pd.DataFrame({
+                    'Stock Move %': steps,
+                    'Call Price $': [f'{p:.2f}' for p in call_sim],
+                    'Put Price $': [f'{p:.2f}' for p in put_sim]
+                })
+                st.dataframe(df_sim)
+
+                fig_opt = go.Figure()
+                fig_opt.add_trace(go.Scatter(x=steps, y=call_sim, mode='lines+markers', name='Call'))
+                fig_opt.add_trace(go.Scatter(x=steps, y=put_sim, mode='lines+markers', name='Put'))
+                fig_opt.update_layout(title='📊 Option Value vs Stock % Move', xaxis_title='% Stock Move', yaxis_title='Option Price ($)')
+                st.plotly_chart(fig_opt)
+
+            else:
+                st.warning("No option chain available for this ticker.")
 
         except Exception as e:
-            st.error(f"Failed to generate forecast: {e}")
-
-    st.subheader("🧾 Option Chain & Sensitivity")
-    try:
-        expirations = stock.options
-        if expirations:
-            nearest_expiry = expirations[0]
-            opt_chain = stock.option_chain(nearest_expiry)
-            calls = opt_chain.calls
-            puts = opt_chain.puts
-
-            current_price = hist["Close"][-1]
-            calls["diff"] = abs(calls["strike"] - current_price)
-            puts["diff"] = abs(puts["strike"] - current_price)
-            atm_call = calls.sort_values("diff").iloc[0]
-            atm_put = puts.sort_values("diff").iloc[0]
-
-            st.markdown(f"**Stock Price:** ${current_price:.2f}")
-            st.markdown(f"**ATM Call Strike:** ${atm_call['strike']} — Bid: ${atm_call['bid']}, Ask: ${atm_call['ask']}")
-            st.markdown(f"**ATM Put Strike:** ${atm_put['strike']} — Bid: ${atm_put['bid']}, Ask: ${atm_put['ask']}")
-
-            st.markdown("#### 🔁 Simulate Option Sensitivity")
-            sim_change = st.slider("Simulate Stock Price Change (%)", -5.0, 5.0, 1.0, step=0.5)
-
-            option_leverage = 5
-            call_pct_change = sim_change * option_leverage
-            put_pct_change = -sim_change * option_leverage
-
-            call_price = (atm_call['bid'] + atm_call['ask']) / 2
-            put_price = (atm_put['bid'] + atm_put['ask']) / 2
-
-            call_estimated = call_price * (1 + call_pct_change / 100)
-            put_estimated = put_price * (1 + put_pct_change / 100)
-
-            st.success(f"💰 Call Estimate: `{call_pct_change:.1f}%` → ${call_estimated:.2f}")
-            st.error(f"📉 Put Estimate: `{put_pct_change:.1f}%` → ${put_estimated:.2f}")
-
-        else:
-            st.warning("No option chain available for this ticker.")
-
-    except Exception as e:
-        st.error(f"Failed to simulate options sensitivity: {e}")
+            st.error(f"Failed to simulate options sensitivity: {e}")
 
 else:
     st.info("Enter a stock ticker and configure your NewsAPI key in secrets to begin.")
