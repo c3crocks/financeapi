@@ -11,8 +11,6 @@ import plotly.graph_objects as go
 from bs4 import BeautifulSoup
 import urllib.request
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
 import numpy as np
 
 st.set_page_config(
@@ -161,52 +159,29 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
 
             st.pyplot(fig)
 
-        st.subheader("🔮 7-Day Forecast (LSTM)")
+        st.subheader("🔮 7-Day Forecast (Prophet)")
         try:
-            df_lstm = stock.history(period="1y")[["Close"]].dropna()
-            df_lstm = df_lstm.rename(columns={"Close": "y"})
+            df_prophet = stock.history(period="1y")[["Close"]].dropna().reset_index()
+            df_prophet = df_prophet.rename(columns={"Date": "ds", "Close": "y"})
+            df_prophet["ds"] = pd.to_datetime(df_prophet["ds"])
 
-            scaler = MinMaxScaler()
-            scaled_data = scaler.fit_transform(df_lstm.values)
+            model = Prophet(daily_seasonality=True)
+            model.fit(df_prophet)
 
-            seq_len = 60
-            x_train, y_train = [], []
-            for i in range(seq_len, len(scaled_data)):
-                x_train.append(scaled_data[i - seq_len:i, 0])
-                y_train.append(scaled_data[i, 0])
+            future = model.make_future_dataframe(periods=7)
+            forecast = model.predict(future)
 
-            x_train, y_train = np.array(x_train), np.array(y_train)
-            x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
-
-            model_lstm = Sequential()
-            model_lstm.add(LSTM(units=50, return_sequences=True, input_shape=(x_train.shape[1], 1)))
-            model_lstm.add(LSTM(units=50))
-            model_lstm.add(Dense(1))
-            model_lstm.compile(optimizer='adam', loss='mean_squared_error')
-            model_lstm.fit(x_train, y_train, epochs=5, batch_size=32, verbose=0)
-
-            inputs = scaled_data[-seq_len:].reshape(1, seq_len, 1)
-            forecast = []
-            for _ in range(7):
-                pred = model_lstm.predict(inputs, verbose=0)[0][0]
-                forecast.append(pred)
-                inputs = np.append(inputs[:, 1:, :], [[[pred]]], axis=1)
-
-            forecast_prices = scaler.inverse_transform(np.array(forecast).reshape(-1, 1))
-            forecast_dates = pd.date_range(start=df_lstm.index[-1] + pd.Timedelta(days=1), periods=7)
-            forecast_df = pd.DataFrame({"Date": forecast_dates.date, "Predicted Close": forecast_prices.flatten()})
+            forecast_display = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(7)
+            forecast_display['ds'] = forecast_display['ds'].dt.date
 
             st.write("Forecasted Prices (next 7 days):")
-            st.dataframe(forecast_df)
+            st.dataframe(forecast_display)
 
-            fig3 = go.Figure()
-            fig3.add_trace(go.Scatter(x=df_lstm.index[-30:], y=df_lstm["y"].values[-30:], mode='lines', name='Past Prices'))
-            fig3.add_trace(go.Scatter(x=forecast_dates, y=forecast_prices.flatten(), mode='lines+markers', name='Forecast'))
-            fig3.update_layout(title="LSTM Forecast", xaxis_title="Date", yaxis_title="Price (USD)")
-            st.plotly_chart(fig3)
+            fig4 = plot_plotly(model, forecast)
+            st.plotly_chart(fig4)
 
         except Exception as e:
-            st.error(f"Failed to generate LSTM forecast: {e}")
+            st.error(f"Failed to generate forecast: {e}")
 
 else:
     st.info("Enter a stock ticker and configure your NewsAPI key in secrets to begin.")

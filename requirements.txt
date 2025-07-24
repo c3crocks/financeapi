@@ -9,4 +9,3 @@ plotly
 prophet
 beautifulsoup4
 scikit-learn
-tensorflow-cpu==2.12.0
