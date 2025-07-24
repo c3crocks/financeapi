@@ -75,12 +75,13 @@ st.markdown("---")
 with st.sidebar:
     st.header("🔍 Stock Selection")
     default_tickers = scrape_motley_fool()
-    if default_tickers:
-        ticker = st.selectbox("Select from top tickers or enter manually", default_tickers + ["Other"])
-        if ticker == "Other":
-            ticker = st.text_input("Enter stock ticker", value="AAPL")
+    company_search = st.text_input("Search company name or ticker", value="Apple")
+
+    if company_search:
+        search_results = yf.Ticker(company_search).info.get("symbol", company_search.upper())
+        ticker = search_results
     else:
-        ticker = st.text_input("Enter stock ticker", value="AAPL")
+        ticker = "AAPL"
 
 newsapi_key = st.secrets.get("newsapi_key", "YOUR_NEWS_API_KEY")
 
@@ -165,7 +166,6 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             df_prophet = df_prophet.rename(columns={"Date": "ds", "Close": "y"})
             df_prophet["ds"] = pd.to_datetime(df_prophet["ds"]).dt.tz_localize(None)
 
-            # Remove outliers
             q1 = df_prophet["y"].quantile(0.25)
             q3 = df_prophet["y"].quantile(0.75)
             iqr = q3 - q1
@@ -180,7 +180,6 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             forecast = model.predict(future)
             forecast[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(forecast[["yhat", "yhat_lower", "yhat_upper"]])
 
-            # Rescale based on last actual
             last_close = hist["Close"][-1]
             scale_factor = last_close / forecast.iloc[-8]["yhat"]
             forecast[["yhat", "yhat_lower", "yhat_upper"]] *= scale_factor
