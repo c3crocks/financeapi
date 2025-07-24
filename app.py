@@ -11,8 +11,8 @@ import plotly.graph_objects as go
 from bs4 import BeautifulSoup
 import urllib.request
 from sklearn.preprocessing import MinMaxScaler
-from keras.models import Sequential
-from keras.layers import LSTM, Dense
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
 import numpy as np
 
 st.set_page_config(
