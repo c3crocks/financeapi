@@ -165,8 +165,12 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             df_prophet = df_prophet.rename(columns={"Date": "ds", "Close": "y"})
             df_prophet["ds"] = pd.to_datetime(df_prophet["ds"]).dt.tz_localize(None)
 
-            median_price = df_prophet['y'].median()
-            df_prophet = df_prophet[df_prophet['y'] < 1.5 * median_price]
+            # Remove outliers
+            q1 = df_prophet["y"].quantile(0.25)
+            q3 = df_prophet["y"].quantile(0.75)
+            iqr = q3 - q1
+            df_prophet = df_prophet[(df_prophet["y"] >= q1 - 1.5 * iqr) & (df_prophet["y"] <= q3 + 1.5 * iqr)]
+
             df_prophet["y"] = np.log(df_prophet["y"])
 
             model = Prophet(daily_seasonality=True)
@@ -175,6 +179,11 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             future = model.make_future_dataframe(periods=7)
             forecast = model.predict(future)
             forecast[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(forecast[["yhat", "yhat_lower", "yhat_upper"]])
+
+            # Rescale based on last actual
+            last_close = hist["Close"][-1]
+            scale_factor = last_close / forecast.iloc[-8]["yhat"]
+            forecast[["yhat", "yhat_lower", "yhat_upper"]] *= scale_factor
 
             forecast_display = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(7)
             forecast_display['ds'] = forecast_display['ds'].dt.date
