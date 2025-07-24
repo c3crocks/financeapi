@@ -5,9 +5,9 @@ requests
 yfinance
 pandas
 matplotlib
-plotly
-scikit-learn
-beautifulsoup4
 prophet
-keras
-tensorflow
+plotly
+beautifulsoup4
+scikit-learn
+keras==2.12.0
+tensorflow==2.12.0
