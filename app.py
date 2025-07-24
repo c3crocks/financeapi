@@ -163,7 +163,7 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
         try:
             df_prophet = stock.history(period="1y")[["Close"]].dropna().reset_index()
             df_prophet = df_prophet.rename(columns={"Date": "ds", "Close": "y"})
-            df_prophet["ds"] = pd.to_datetime(df_prophet["ds"])
+            df_prophet["ds"] = pd.to_datetime(df_prophet["ds"]).dt.tz_localize(None)
 
             model = Prophet(daily_seasonality=True)
             model.fit(df_prophet)
