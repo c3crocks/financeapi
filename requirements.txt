@@ -10,3 +10,4 @@ cmdstanpy
 plotly
 beautifulsoup4
 lxml
+sklearn
