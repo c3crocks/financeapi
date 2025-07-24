@@ -157,7 +157,7 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
 
             st.pyplot(fig)
 
-        st.subheader("🔮 70-Day Forecast")
+        st.subheader("🔮 7-Day Forecast")
         try:
             df = stock.history(period="1y")
             df = df[["Close"]].reset_index()
@@ -167,10 +167,10 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             model = Prophet(daily_seasonality=True)
             model.fit(df)
 
-            future = model.make_future_dataframe(periods=70)
+            future = model.make_future_dataframe(periods=7)
             forecast = model.predict(future)
 
-            st.write("Forecasted Prices (next 70 days):")
+            st.write("Forecasted Prices (next 7 days):")
             st.dataframe(forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].tail(10))
 
             fig2 = plot_plotly(model, forecast)
