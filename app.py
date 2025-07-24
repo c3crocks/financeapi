@@ -165,11 +165,16 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             df_prophet = df_prophet.rename(columns={"Date": "ds", "Close": "y"})
             df_prophet["ds"] = pd.to_datetime(df_prophet["ds"]).dt.tz_localize(None)
 
+            median_price = df_prophet['y'].median()
+            df_prophet = df_prophet[df_prophet['y'] < 1.5 * median_price]
+            df_prophet["y"] = np.log(df_prophet["y"])
+
             model = Prophet(daily_seasonality=True)
             model.fit(df_prophet)
 
             future = model.make_future_dataframe(periods=7)
             forecast = model.predict(future)
+            forecast[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(forecast[["yhat", "yhat_lower", "yhat_upper"]])
 
             forecast_display = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(7)
             forecast_display['ds'] = forecast_display['ds'].dt.date
