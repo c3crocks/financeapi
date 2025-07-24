@@ -10,6 +10,10 @@ from prophet.plot import plot_plotly
 import plotly.graph_objects as go
 from bs4 import BeautifulSoup
 import urllib.request
+from sklearn.preprocessing import MinMaxScaler
+from keras.models import Sequential
+from keras.layers import LSTM, Dense
+import numpy as np
 
 st.set_page_config(
     page_title="FinScope AI",
@@ -159,11 +163,6 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
 
         st.subheader("🔮 7-Day Forecast (LSTM)")
         try:
-            from sklearn.preprocessing import MinMaxScaler
-            from keras.models import Sequential
-            from keras.layers import LSTM, Dense
-            import numpy as np
-
             df_lstm = stock.history(period="1y")[["Close"]].dropna()
             df_lstm = df_lstm.rename(columns={"Close": "y"})
 
@@ -189,7 +188,7 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             inputs = scaled_data[-seq_len:].reshape(1, seq_len, 1)
             forecast = []
             for _ in range(7):
-                pred = model_lstm.predict(inputs)[0][0]
+                pred = model_lstm.predict(inputs, verbose=0)[0][0]
                 forecast.append(pred)
                 inputs = np.append(inputs[:, 1:, :], [[[pred]]], axis=1)
 
@@ -208,9 +207,6 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
 
         except Exception as e:
             st.error(f"Failed to generate LSTM forecast: {e}")
-
-        except Exception as e:
-            st.error(f"Failed to generate forecast: {e}")
 
 else:
     st.info("Enter a stock ticker and configure your NewsAPI key in secrets to begin.")
