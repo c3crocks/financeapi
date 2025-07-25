@@ -152,6 +152,7 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             st.pyplot(fig)
 
         # Forecasting with Prophet
+        # Forecasting with Prophet
         st.subheader("🔮 7-Day Forecast (Prophet)")
         try:
             df_prophet = yf.download(ticker, period="1y", progress=False)[["Close"]].dropna().reset_index()
@@ -167,7 +168,7 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
                 iqr = q3 - q1
                 df_prophet = df_prophet[(df_prophet["y"] >= q1 - 1.5 * iqr) & (df_prophet["y"] <= q3 + 1.5 * iqr)]
 
-                # Log scale
+                # Log transform
                 df_prophet["y"] = np.log(df_prophet["y"])
                 model = Prophet(daily_seasonality=True)
                 model.fit(df_prophet)
@@ -175,17 +176,18 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
                 future = model.make_future_dataframe(periods=7)
                 forecast = model.predict(future)
 
-                # Convert back to real scale
+                # Convert back to original price scale
                 forecast[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(forecast[["yhat", "yhat_lower", "yhat_upper"]])
 
-                # Adjust scale
-                # Estimate scale using last known actual vs. last known prediction
+                # Get last actual log-close value and scale
                 last_actual = np.exp(df_prophet["y"].iloc[-1])
-                forecast_base = forecast.iloc[len(df_prophet) - 1]["yhat"]  # Same position in forecast as last actual
-                scale_factor = last_actual / forecast_base
-                forecast[["yhat", "yhat_lower", "yhat_upper"]] *= scale_factor
+                forecast_base = forecast["yhat"].iloc[len(df_prophet) - 1]  # match index
+                scale_factor = float(last_actual / forecast_base)  # ensure scalar
 
+                # Apply scale
+                forecast[["yhat", "yhat_lower", "yhat_upper"]] = forecast[["yhat", "yhat_lower", "yhat_upper"]] * scale_factor
 
+                # Display forecast
                 forecast_display = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(7)
                 forecast_display['ds'] = forecast_display['ds'].dt.date
                 st.write("Forecasted Prices (Next 7 Days):")
@@ -196,6 +198,7 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
 
         except Exception as e:
             st.error(f"⚠️ Forecast error: {e}")
+
 
 else:
     st.info("Enter a valid stock ticker and set your NewsAPI key in `.streamlit/secrets.toml`.")
