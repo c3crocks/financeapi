@@ -148,57 +148,48 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             st.pyplot(fig)
 
         # Forecasting with Prophet
+        # Forecasting with Prophet
         st.subheader("🔮 7-Day Forecast (Prophet)")
         try:
-            # Download fresh historical data
+            # Get historical data
             df_prophet = yf.download(ticker, period="1y", progress=False)[["Close"]].dropna().reset_index()
             df_prophet.rename(columns={"Date": "ds", "Close": "y"}, inplace=True)
             df_prophet["ds"] = pd.to_datetime(df_prophet["ds"])
-        
+
             if len(df_prophet) < 30:
                 st.warning("Not enough data for forecast.")
             else:
-                # Optional: outlier removal
+                # Optional outlier removal
                 q1 = df_prophet["y"].quantile(0.25)
                 q3 = df_prophet["y"].quantile(0.75)
                 iqr = q3 - q1
                 df_prophet = df_prophet[(df_prophet["y"] >= q1 - 1.5 * iqr) & (df_prophet["y"] <= q3 + 1.5 * iqr)]
-        
-                # Prophet needs log for better fit
+
+                # Log transform for stability
                 df_prophet["y"] = np.log(df_prophet["y"])
-        
+
+                # Prophet modeling
                 model = Prophet(daily_seasonality=True)
                 model.fit(df_prophet)
-        
+
                 future = model.make_future_dataframe(periods=7)
                 forecast = model.predict(future)
-        
-                # Convert back from log
+
+                # Revert log scale
                 forecast[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(forecast[["yhat", "yhat_lower", "yhat_upper"]])
-        
-                # Optional Rescaling – only if valid
-                try:
-                    last_actual = np.exp(df_prophet["y"].iloc[-1])
-                    forecast_base = forecast["yhat"].iloc[len(df_prophet) - 1]
-                    if not np.isnan(forecast_base) and forecast_base != 0:
-                        scale_factor = float(last_actual / forecast_base)
-                        forecast[["yhat", "yhat_lower", "yhat_upper"]] *= scale_factor
-                    else:
-                        st.warning("Forecast base is invalid. Skipping rescaling.")
-                except Exception as inner_e:
-                    st.warning(f"Rescaling skipped due to error: {inner_e}")
-        
+
+                # Display results
                 forecast_display = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(7)
                 forecast_display['ds'] = forecast_display['ds'].dt.date
-        
                 st.write("Forecasted Prices (Next 7 Days):")
                 st.dataframe(forecast_display)
-        
+
                 fig4 = plot_plotly(model, forecast)
                 st.plotly_chart(fig4)
-        
+
         except Exception as e:
             st.error(f"⚠️ Forecast error: {e}")
+
 
 
 else:
