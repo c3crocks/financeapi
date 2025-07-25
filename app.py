@@ -149,6 +149,7 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
 
         # Forecasting with Prophet
         # Forecasting with Linear Regression
+        # Forecasting with Linear Regression
         st.subheader("🔮 7-Day Forecast (Linear Regression)")
         try:
             from sklearn.linear_model import LinearRegression
@@ -169,11 +170,12 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             last_date = df_lr["ds"].max()
             future_dates = [last_date + pd.Timedelta(days=i) for i in range(1, 8)]
             future_ordinals = np.array([d.toordinal() for d in future_dates]).reshape(-1, 1)
-            future_preds = model.predict(future_ordinals)
+            future_preds = model.predict(future_ordinals).flatten()
 
+            # ✅ Fix: Ensure 1D lists
             forecast_display = pd.DataFrame({
                 "ds": [d.date() for d in future_dates],
-                "yhat": future_preds
+                "yhat": future_preds.tolist()
             })
 
             st.write("Forecasted Prices (Next 7 Days):")
@@ -192,6 +194,7 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
 
         except Exception as e:
             st.error(f"⚠️ Forecast error: {e}")
+
 
 
 
