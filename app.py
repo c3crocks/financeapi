@@ -11,10 +11,9 @@ from bs4 import BeautifulSoup
 import urllib.request
 import numpy as np
 
-# Page configuration
+# Page setup
 st.set_page_config(page_title="FinScope AI", page_icon="📈", layout="wide")
 
-# Load sentiment model (cached)
 @st.cache_resource
 def load_model():
     tokenizer = AutoTokenizer.from_pretrained("yiyanghkust/finbert-tone")
@@ -23,7 +22,6 @@ def load_model():
 
 tokenizer, model = load_model()
 
-# Functions
 def get_news(ticker, api_key):
     url = f"https://newsapi.org/v2/everything?q={ticker}&sortBy=publishedAt&language=en&apiKey={api_key}"
     response = requests.get(url)
@@ -56,7 +54,7 @@ def scrape_motley_fool():
     except:
         return []
 
-# UI Layout
+# UI
 st.title("📈 FinScope AI")
 st.markdown("""
     <style>
@@ -73,7 +71,7 @@ with st.sidebar:
     company_search = st.text_input("Search company name or ticker", value="AAPL")
     ticker = yf.Ticker(company_search).info.get("symbol", company_search.upper())
 
-# API key
+# News API key
 newsapi_key = st.secrets.get("newsapi_key", "YOUR_NEWS_API_KEY")
 
 if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
@@ -86,7 +84,6 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
     with tab1:
         col1, col2 = st.columns(2)
 
-        # News & Sentiment
         with col1:
             st.subheader("📰 News Sentiment Analysis")
             headlines = get_news(ticker, newsapi_key)
@@ -98,12 +95,11 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             recommendation = summarize_sentiments(sentiments)
             st.success(f"### 📊 Recommendation: **{recommendation}**")
 
-        # Price Chart
         with col2:
             st.subheader("📉 Price Chart")
             if not hist.empty:
                 fig, ax = plt.subplots()
-                ax.plot(hist.index, hist["Close"], label="Closing Price", color='blue')
+                ax.plot(hist.index, hist["Close"], label="Close Price", color='blue')
                 ax.set_title(f"{ticker.upper()} - Last 6 Months")
                 ax.set_xlabel("Date")
                 ax.set_ylabel("Price (USD)")
@@ -152,14 +148,13 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             st.pyplot(fig)
 
         # Forecasting with Prophet
-        # Forecasting with Prophet
         st.subheader("🔮 7-Day Forecast (Prophet)")
         try:
             df_prophet = yf.download(ticker, period="1y", progress=False)[["Close"]].dropna().reset_index()
-            df_prophet = df_prophet.rename(columns={"Date": "ds", "Close": "y"})
+            df_prophet.rename(columns={"Date": "ds", "Close": "y"}, inplace=True)
             df_prophet["ds"] = pd.to_datetime(df_prophet["ds"])
 
-            if df_prophet.empty or len(df_prophet) < 30:
+            if len(df_prophet) < 30:
                 st.warning("Not enough data for forecast.")
             else:
                 # Remove outliers
@@ -170,26 +165,28 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
 
                 # Log transform
                 df_prophet["y"] = np.log(df_prophet["y"])
+
                 model = Prophet(daily_seasonality=True)
                 model.fit(df_prophet)
 
                 future = model.make_future_dataframe(periods=7)
                 forecast = model.predict(future)
 
-                # Convert back to original price scale
+                # Revert log transform
                 forecast[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(forecast[["yhat", "yhat_lower", "yhat_upper"]])
 
-                # Get last actual log-close value and scale
+                # Scale forecast to match last actual value
                 last_actual = np.exp(df_prophet["y"].iloc[-1])
-                forecast_base = forecast["yhat"].iloc[len(df_prophet) - 1]  # match index
-                scale_factor = float(last_actual / forecast_base)  # ensure scalar
+                forecast_index = len(df_prophet) - 1
+                forecast_base = forecast["yhat"].iloc[forecast_index]
 
-                # Apply scale
-                forecast[["yhat", "yhat_lower", "yhat_upper"]] = forecast[["yhat", "yhat_lower", "yhat_upper"]] * scale_factor
+                # Ensure it's a float to avoid the 1-D array error
+                scale_factor = float(last_actual / forecast_base)
+                forecast[["yhat", "yhat_lower", "yhat_upper"]] *= scale_factor
 
-                # Display forecast
                 forecast_display = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(7)
                 forecast_display['ds'] = forecast_display['ds'].dt.date
+
                 st.write("Forecasted Prices (Next 7 Days):")
                 st.dataframe(forecast_display)
 
@@ -198,7 +195,6 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
 
         except Exception as e:
             st.error(f"⚠️ Forecast error: {e}")
-
 
 else:
     st.info("Enter a valid stock ticker and set your NewsAPI key in `.streamlit/secrets.toml`.")
