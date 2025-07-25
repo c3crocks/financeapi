@@ -148,47 +148,51 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
             st.pyplot(fig)
 
         # Forecasting with Prophet
-        # Forecasting with Prophet
-        st.subheader("🔮 7-Day Forecast (Prophet)")
+        # Forecasting with Linear Regression
+        st.subheader("🔮 7-Day Forecast (Linear Regression)")
         try:
-            # Get historical data
-            df_prophet = yf.download(ticker, period="1y", progress=False)[["Close"]].dropna().reset_index()
-            df_prophet.rename(columns={"Date": "ds", "Close": "y"}, inplace=True)
-            df_prophet["ds"] = pd.to_datetime(df_prophet["ds"])
+            from sklearn.linear_model import LinearRegression
 
-            if len(df_prophet) < 30:
-                st.warning("Not enough data for forecast.")
-            else:
-                # Optional outlier removal
-                q1 = df_prophet["y"].quantile(0.25)
-                q3 = df_prophet["y"].quantile(0.75)
-                iqr = q3 - q1
-                df_prophet = df_prophet[(df_prophet["y"] >= q1 - 1.5 * iqr) & (df_prophet["y"] <= q3 + 1.5 * iqr)]
+            df_lr = yf.download(ticker, period="6mo", progress=False)[["Close"]].dropna().reset_index()
+            df_lr.rename(columns={"Date": "ds", "Close": "y"}, inplace=True)
+            df_lr["ds"] = pd.to_datetime(df_lr["ds"])
+            df_lr["ds_ordinal"] = df_lr["ds"].map(pd.Timestamp.toordinal)
 
-                # Log transform for stability
-                df_prophet["y"] = np.log(df_prophet["y"])
+            # Prepare training data
+            X = df_lr["ds_ordinal"].values.reshape(-1, 1)
+            y = df_lr["y"].values
 
-                # Prophet modeling
-                model = Prophet(daily_seasonality=True)
-                model.fit(df_prophet)
+            model = LinearRegression()
+            model.fit(X, y)
 
-                future = model.make_future_dataframe(periods=7)
-                forecast = model.predict(future)
+            # Predict next 7 days
+            last_date = df_lr["ds"].max()
+            future_dates = [last_date + pd.Timedelta(days=i) for i in range(1, 8)]
+            future_ordinals = np.array([d.toordinal() for d in future_dates]).reshape(-1, 1)
+            future_preds = model.predict(future_ordinals)
 
-                # Revert log scale
-                forecast[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(forecast[["yhat", "yhat_lower", "yhat_upper"]])
+            forecast_display = pd.DataFrame({
+                "ds": [d.date() for d in future_dates],
+                "yhat": future_preds
+            })
 
-                # Display results
-                forecast_display = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(7)
-                forecast_display['ds'] = forecast_display['ds'].dt.date
-                st.write("Forecasted Prices (Next 7 Days):")
-                st.dataframe(forecast_display)
+            st.write("Forecasted Prices (Next 7 Days):")
+            st.dataframe(forecast_display)
 
-                fig4 = plot_plotly(model, forecast)
-                st.plotly_chart(fig4)
+            # Plot
+            fig, ax = plt.subplots()
+            ax.plot(df_lr["ds"], df_lr["y"], label="Historical Close")
+            ax.plot(forecast_display["ds"], forecast_display["yhat"], label="Forecast", color="orange", linestyle="--")
+            ax.set_title(f"{ticker.upper()} Forecast (Linear Regression)")
+            ax.set_xlabel("Date")
+            ax.set_ylabel("Price (USD)")
+            ax.legend()
+            ax.grid(True)
+            st.pyplot(fig)
 
         except Exception as e:
             st.error(f"⚠️ Forecast error: {e}")
+
 
 
 
