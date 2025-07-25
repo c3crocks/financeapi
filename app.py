@@ -179,11 +179,12 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
                 forecast[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(forecast[["yhat", "yhat_lower", "yhat_upper"]])
 
                 # Adjust scale
+                # Estimate scale using last known actual vs. last known prediction
                 last_actual = np.exp(df_prophet["y"].iloc[-1])
-                forecast_base = forecast.loc[forecast["ds"] == df_prophet["ds"].iloc[-1], "yhat"].values
-                if forecast_base.size > 0:
-                    scale_factor = last_actual / forecast_base[0]
-                    forecast[["yhat", "yhat_lower", "yhat_upper"]] *= scale_factor
+                forecast_base = forecast.iloc[len(df_prophet) - 1]["yhat"]  # Same position in forecast as last actual
+                scale_factor = last_actual / forecast_base
+                forecast[["yhat", "yhat_lower", "yhat_upper"]] *= scale_factor
+
 
                 forecast_display = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(7)
                 forecast_display['ds'] = forecast_display['ds'].dt.date
