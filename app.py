@@ -121,80 +121,57 @@ if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
                 st.warning("No price data found for this ticker.")
 
     with tab2:
-        st.subheader("📐 Technical Indicators")
-        if not hist.empty:
-            df = hist.copy()
-            df["MA20"] = df["Close"].rolling(window=20).mean()
-            delta = df["Close"].diff()
-            gain = delta.clip(lower=0)
-            loss = -delta.clip(upper=0)
-            avg_gain = gain.rolling(window=14).mean()
-            avg_loss = loss.rolling(window=14).mean()
-            rs = avg_gain / avg_loss
-            df["RSI"] = 100 - (100 / (1 + rs))
-            exp1 = df["Close"].ewm(span=12, adjust=False).mean()
-            exp2 = df["Close"].ewm(span=26, adjust=False).mean()
-            df["MACD"] = exp1 - exp2
-            df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
-
-            fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
-            axs[0].plot(df.index, df["Close"], label="Close Price")
-            axs[0].plot(df.index, df["MA20"], label="MA20", linestyle="--")
-            axs[0].set_ylabel("Price")
-            axs[0].legend()
-            axs[0].set_title(f"{ticker.upper()} Price & MA")
-
-            axs[1].plot(df.index, df["RSI"], color="orange", label="RSI")
-            axs[1].axhline(70, color='red', linestyle='--')
-            axs[1].axhline(30, color='green', linestyle='--')
-            axs[1].set_ylabel("RSI")
-            axs[1].legend()
-            axs[1].set_title("Relative Strength Index (RSI)")
-
-            axs[2].plot(df.index, df["MACD"], label="MACD", color="blue")
-            axs[2].plot(df.index, df["Signal"], label="Signal", color="magenta")
-            axs[2].axhline(0, color='black', linestyle='--')
-            axs[2].set_ylabel("MACD")
-            axs[2].legend()
-            axs[2].set_title("MACD")
-
-            st.pyplot(fig)
-
         st.subheader("🔮 7-Day Forecast (Prophet)")
         try:
-            df_prophet = stock.history(period="1y")[["Close"]].dropna().reset_index()
+            # Fetch fresh data directly, bypassing Ticker cache
+            df_prophet = yf.download(ticker, period="1y", progress=False)[["Close"]].dropna().reset_index()
             df_prophet = df_prophet.rename(columns={"Date": "ds", "Close": "y"})
-            df_prophet["ds"] = pd.to_datetime(df_prophet["ds"]).dt.tz_localize(None)
+            df_prophet["ds"] = pd.to_datetime(df_prophet["ds"])
 
+            # Optional: Display last available date to verify freshness
+            st.write(f"📅 Last available date in data: {df_prophet['ds'].max().date()}")
+
+            # Outlier filtering using IQR
             q1 = df_prophet["y"].quantile(0.25)
             q3 = df_prophet["y"].quantile(0.75)
             iqr = q3 - q1
             df_prophet = df_prophet[(df_prophet["y"] >= q1 - 1.5 * iqr) & (df_prophet["y"] <= q3 + 1.5 * iqr)]
 
+            # Log transform for better forecasting
             df_prophet["y"] = np.log(df_prophet["y"])
 
+            # Build and fit Prophet model
             model = Prophet(daily_seasonality=True)
             model.fit(df_prophet)
 
+            # Forecast 7 future days
             future = model.make_future_dataframe(periods=7)
             forecast = model.predict(future)
+
+            # Revert log transform
             forecast[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(forecast[["yhat", "yhat_lower", "yhat_upper"]])
 
-            last_close = hist["Close"][-1]
-            scale_factor = last_close / forecast.iloc[-8]["yhat"]
+            # Rescale forecast to match last actual close price
+            last_close = df_prophet["y"].iloc[-1]
+            original_last_close = np.exp(last_close)
+            forecast_base = forecast.iloc[-8]["yhat"]  # 8th last = last known value before future
+            scale_factor = original_last_close / forecast_base
             forecast[["yhat", "yhat_lower", "yhat_upper"]] *= scale_factor
 
+            # Prepare final forecast table
             forecast_display = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(7)
             forecast_display['ds'] = forecast_display['ds'].dt.date
 
             st.write("Forecasted Prices (next 7 days):")
             st.dataframe(forecast_display)
 
+            # Interactive plot
             fig4 = plot_plotly(model, forecast)
             st.plotly_chart(fig4)
 
         except Exception as e:
-            st.error(f"Failed to generate forecast: {e}")
+            st.error(f"⚠️ Failed to generate forecast: {e}")
+
 
 else:
     st.info("Enter a stock ticker and configure your NewsAPI key in secrets to begin.")
