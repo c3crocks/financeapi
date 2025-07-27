@@ -108,22 +108,21 @@ def advice_from_score(score: float) -> str:
 
 @st.cache_data(ttl=43200, show_spinner=False)
 def prophet_forecast(symbol: str, days: int = 7):
-    """Generate model and full forecast DataFrame for the past year + `days` ahead."""
-    df = (
+    """Return history (DataFrame) and forecast DataFrame (future + history)."""
+    hist = (
         yf.download(symbol, period="1y", progress=False)[["Close"]]
         .dropna()
         .reset_index()
         .rename(columns={"Date": "ds", "Close": "y"})
     )
-    df["y"] = np.log(df["y"])
-    model = Prophet(daily_seasonality=True)
-    model.fit(df)
-    future = model.make_future_dataframe(periods=days)
-    fcst = model.predict(future)
-    fcst[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(
-        fcst[["yhat", "yhat_lower", "yhat_upper"]]
-    )
-    return model, df, fcst
+    hist["y"] = np.log(hist["y"])
+
+    m = Prophet(daily_seasonality=True)
+    m.fit(hist)
+    future = m.make_future_dataframe(periods=days)
+    fcst = m.predict(future)
+    fcst["yhat"] = np.exp(fcst["yhat"])  # central estimate
+    return hist, fcst
 
 # -----------------------------------------------------------------------------
 # 🖥️  MAIN UI
@@ -217,7 +216,7 @@ def main() -> None:
     with tab_forecast:
         st.subheader("Prophet 7-day forecast (experimental)")
         try:
-            model, hist_df, full_fcst = prophet_forecast(choice, days=7)
+            hist_df, full_fcst = prophet_forecast(choice, days=7)
 
             # Display only the 7‑day future window in a table
             fcst_display = (
@@ -226,10 +225,9 @@ def main() -> None:
             )
             st.dataframe(fcst_display, use_container_width=True, height=220)
 
-            # --- Custom Plotly chart (avoids plot_plotly internal errors) ---
+            # --- Custom Plotly line & band chart ---
             fig_fcst = go.Figure()
-
-            # Historical close prices (re‑scale the logged series back)
+            # Historical prices (original scale)
             fig_fcst.add_trace(
                 go.Scatter(
                     x=hist_df["ds"],
@@ -239,8 +237,7 @@ def main() -> None:
                     line=dict(width=1)
                 )
             )
-
-            # Forecasted central estimate
+            # Forecast line
             fig_fcst.add_trace(
                 go.Scatter(
                     x=full_fcst["ds"],
@@ -249,21 +246,8 @@ def main() -> None:
                     name="Forecast",
                 )
             )
-
-            # Confidence interval (shaded area)
-            fig_fcst.add_trace(
-                go.Scatter(
-                    x=pd.concat([full_fcst["ds"], full_fcst["ds"][::-1]]),
-                    y=pd.concat([full_fcst["yhat_upper"], full_fcst["yhat_lower"][::-1]]),
-                    fill="toself",
-                    fillcolor="rgba(0, 100, 80, 0.15)",
-                    line=dict(color="rgba(255,255,255,0)"),
-                    showlegend=False,
-                    hoverinfo="skip",
-                )
-            )
-
             fig_fcst.update_layout(height=400, xaxis_title="Date", yaxis_title="Price (USD)")
+            st.plotly_chart(fig_fcst, use_container_width=True)")
             st.plotly_chart(fig_fcst, use_container_width=True)
 
         except Exception as err:
