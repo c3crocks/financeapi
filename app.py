@@ -105,17 +105,21 @@ def advice_from_score(score: float) -> str:
 # -----------------------------------------------------------------------------
 
 def compute_intraday_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """Return DataFrame with SMA, RSI and entry signal column.
+    """Compute SMA‑20, RSI‑14 and a boolean Entry flag.
 
-    The function first flattens any MultiIndex columns that could break
-    element‑wise comparisons, then calculates SMA‑20 and RSI‑14. An *Entry*
-    boolean is True at the first bar where price closes above its SMA‑20
-    with an RSI < 70.
+    *Column name quirks*
+    YFinance sometimes returns lowercase (`close`) and sometimes title‑case
+    (`Close`). We normalise to title‑case so subsequent math is safe.
     """
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(-1)
 
+    # Normalise column names to title‑case (close → Close)
+    df.columns = [c.title() for c in df.columns]
+
     # Ensure required column exists
+    if "Close" not in df.columns:
+        raise ValueError("Intraday data lacks 'Close' column after normalisation")
     if "Close" not in df.columns:
         raise ValueError("Intraday DataFrame missing 'Close' column")
 
