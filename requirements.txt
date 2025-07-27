@@ -1,11 +1,13 @@
 streamlit
 transformers
 torch
-requests
+requests          # already present 👍
+httpx             # ← new
 yfinance
 pandas
+numpy             # implicit via pandas, but list it explicitly
 matplotlib
 plotly
-prophet
+prophet           # pulls cmdstanpy & arviz automatically
 beautifulsoup4
 scikit-learn
