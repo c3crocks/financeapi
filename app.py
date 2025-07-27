@@ -1,6 +1,5 @@
 import asyncio
 import re
-from datetime import timedelta
 
 import httpx
 import numpy as np
@@ -27,7 +26,7 @@ st.set_page_config(
 # ⚙️  HELPERS & CACHING
 # -----------------------------------------------------------------------------
 
-@st.cache_resource(show_spinner=False, ttl=None, allow_output_mutation=True)
+@st.cache_resource(show_spinner=False, ttl=None)
 def get_model():
     """Load FinBERT sentiment model (cached across sessions)."""
     tokenizer = AutoTokenizer.from_pretrained("yiyanghkust/finbert-tone")
@@ -236,18 +235,4 @@ def main() -> None:
     with tab_forecast:
         st.subheader("Prophet 7‑day forecast (experimental)")
         try:
-            model, fcst = prophet_forecast(choice, 7)
-            st.dataframe(
-                fcst[["ds", "yhat", "yhat_lower", "yhat_upper"]].set_index("ds"),
-                use_container_width=True,
-                height=220,
-            )
-            st.plotly_chart(plot_plotly(model, model.predict(model.make_future_dataframe(7))), use_container_width=True)
-        except Exception as err:
-            st.error(f"Forecast failed: {err}")
-
-
-# -----------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    main()
+            model, fcst = prophet_forecast
