@@ -30,22 +30,20 @@ if st.query_params.get("accept") == ["1"]:
     st.session_state.disclaimer_accepted = True
 
 if not st.session_state.get("disclaimer_accepted", False):
-    st.markdown(
-        f"""
-        <style>
-        .fs-overlay{{position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:10000;}}
-        .fs-inner{{background:#fff;color:#000;padding:2rem;max-width:800px;width:90%;border-radius:8px;max-height:85vh;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);}}
-        .fs-btn{{display:inline-block;margin-top:1.5rem;padding:0.6rem 1.4rem;background:#1f77b4;color:#fff;border-radius:4px;text-decoration:none;font-weight:600;}}
-        </style>
-        <div class='fs-overlay'>
-          <div class='fs-inner'>
-            {DISCLAIMER_MD}
-            <center><a class='fs-btn' href='?accept=1'>I Acknowledge and Agree</a></center>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        overlay_html = f"""
+<style>
+.fs-overlay{{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.65);z-index:10000;}}
+.fs-inner{{background:#fff;color:#000;padding:2rem;max-width:800px;width:90%;border-radius:8px;max-height:85vh;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);}}
+.fs-btn{{display:inline-block;margin-top:1.5rem;padding:0.6rem 1.4rem;background:#1f77b4;color:#fff;border-radius:4px;text-decoration:none;font-weight:600;}}
+</style>
+<div class="fs-overlay">
+  <div class="fs-inner">
+    {DISCLAIMER_MD}
+    <center><a class="fs-btn" href="?accept=1">I Acknowledge and Agree</a></center>
+  </div>
+</div>
+"""
+    st.markdown(overlay_html, unsafe_allow_html=True)
     st.stop()
 
 # -----------------------------------------------------------------------------
