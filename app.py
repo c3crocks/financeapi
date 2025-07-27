@@ -33,17 +33,40 @@ if "disclaimer_accepted" not in st.session_state:
     st.session_state.disclaimer_accepted = False
 
 if not st.session_state.disclaimer_accepted:
-    placeholder = st.empty()
-    with placeholder.container():
-        st.markdown(DISCLAIMER_MD)
-        if st.button("I Acknowledge and Agree"):
+    overlay = st.empty()
+    with overlay.container():
+        st.markdown(
+            f"""
+            <style>
+            .fs-overlay {{
+                position: fixed;
+                top: 0; left: 0;
+                width: 100%; height: 100%;
+                background: rgba(0,0,0,0.65);
+                display: flex; justify-content: center; align-items: center;
+                z-index: 9999;
+            }}
+            .fs-box {{
+                background:#fff; padding:2rem; max-width:800px; width:90%;
+                border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.25);
+                overflow-y:auto; max-height:80vh;
+            }}
+            </style>
+            <div class="fs-overlay">
+              <div class="fs-box">
+                {DISCLAIMER_MD}
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("
+")  # spacing for button alignment
+        if st.button("I Acknowledge and Agree", key="accept_disclaimer"):
             st.session_state.disclaimer_accepted = True
-            placeholder.empty()
-            if hasattr(st, "experimental_rerun"):
-                st.experimental_rerun()
-            else:
-                st.warning("Please refresh the page to continue.")
-                st.stop()
+            overlay.empty()
+            st.experimental_rerun()
+    st.stop()
     st.stop()
 
 # -----------------------------------------------------------------------------
