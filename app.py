@@ -179,7 +179,9 @@ def main():
 
     with tab_chart:
         st.subheader(f"{ticker} price history – {period}")
-        fig = go.Figure([go.Candlestick(x=hist.index, open=hist.Open, high=hist.High, low=hist.Low, close=hist.Close)])
+        fig = go.Figure([
+            go.Candlestick(x=hist.index, open=hist.Open, high=hist.High, low=hist.Low, close=hist.Close)
+        ])
         fig.update_layout(height=400, xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
