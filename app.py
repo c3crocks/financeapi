@@ -213,20 +213,59 @@ def main() -> None:
         fig.update_layout(height=400, xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
-    # Forecast Tab
+        # Forecast Tab
     with tab_forecast:
         st.subheader("Prophet 7-day forecast (experimental)")
         try:
             model, hist_df, full_fcst = prophet_forecast(choice, days=7)
-            # Display only the 7-day future window
+
+            # Display only the 7‑day future window in a table
             fcst_display = (
-                full_fcst[["ds", "yhat", "yhat_lower", "yhat_upper"]]
-                .tail(7)
+                full_fcst.tail(7)[["ds", "yhat", "yhat_lower", "yhat_upper"]]
                 .assign(ds=lambda df: df["ds"].dt.date)
             )
             st.dataframe(fcst_display, use_container_width=True, height=220)
-            # Plot full forecast plus history
-            st.plotly_chart(plot_plotly(model, full_fcst), use_container_width=True)
+
+            # --- Custom Plotly chart (avoids plot_plotly internal errors) ---
+            fig_fcst = go.Figure()
+
+            # Historical close prices (re‑scale the logged series back)
+            fig_fcst.add_trace(
+                go.Scatter(
+                    x=hist_df["ds"],
+                    y=np.exp(hist_df["y"]),
+                    mode="lines",
+                    name="History",
+                    line=dict(width=1)
+                )
+            )
+
+            # Forecasted central estimate
+            fig_fcst.add_trace(
+                go.Scatter(
+                    x=full_fcst["ds"],
+                    y=full_fcst["yhat"],
+                    mode="lines",
+                    name="Forecast",
+                )
+            )
+
+            # Confidence interval (shaded area)
+            fig_fcst.add_trace(
+                go.Scatter(
+                    x=pd.concat([full_fcst["ds"], full_fcst["ds"][::-1]]),
+                    y=pd.concat([full_fcst["yhat_upper"], full_fcst["yhat_lower"][::-1]]),
+                    fill="toself",
+                    fillcolor="rgba(0, 100, 80, 0.15)",
+                    line=dict(color="rgba(255,255,255,0)"),
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
+
+            fig_fcst.update_layout(height=400, xaxis_title="Date", yaxis_title="Price (USD)")
+            st.plotly_chart(fig_fcst, use_container_width=True)
+
         except Exception as err:
             st.error(f"Forecast failed: {err}")
 
