@@ -1,4 +1,3 @@
-import asyncio
 import re
 
 import httpx
@@ -40,8 +39,8 @@ def _clean_headline(h: str) -> str:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-async def fetch_news(ticker: str, api_key: str) -> list[str]:
-    """Asynchronously pull latest news headlines (<=20) for the symbol."""
+def fetch_news(ticker: str, api_key: str) -> list[str]:
+    """Pull latest news headlines (<=20) for the symbol synchronously."""
     url = "https://newsapi.org/v2/everything"
     params = {
         "q": ticker,
@@ -50,10 +49,10 @@ async def fetch_news(ticker: str, api_key: str) -> list[str]:
         "pageSize": 20,
         "apiKey": api_key,
     }
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url, params=params)
-        r.raise_for_status()
-        return [_clean_headline(a["title"]) for a in r.json().get("articles", [])]
+    r = httpx.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    articles = r.json().get("articles", [])
+    return [_clean_headline(a.get("title", "")) for a in articles]
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -66,8 +65,7 @@ def get_ticker_list() -> list[str]:
         html = requests.get("https://www.fool.com/investing/", timeout=10).text
         soup = BeautifulSoup(html, "html.parser")
         return [
-            a.text
-            for a in soup.find_all("a")
+            a.text for a in soup.find_all("a")
             if a.text.isupper() and len(a.text) <= 5
         ][:10]
     except Exception:
@@ -166,7 +164,7 @@ def main() -> None:
         st.stop()
 
     with st.spinner("Fetching latest headlines …"):
-        headlines = asyncio.run(fetch_news(choice, news_key))[:5]
+        headlines = fetch_news(choice, news_key)[:5]
 
     if headlines:
         labels, compound = score_sentiment(headlines)
