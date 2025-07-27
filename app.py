@@ -193,4 +193,78 @@ def main():
     # ---------- Tabs ----------
     tab_news, tab_chart, tab_intraday = st.tabs(["📰 News", "📉 Chart", "⏱️ Intraday"])
 
+    # ----- News tab -----
     with tab_news:
+        st.subheader("Latest headlines")
+        if not headlines:
+            st.write("No recent news.")
+        else:
+            for hl, lbl in zip(headlines, labels):
+                st.markdown(f"- **{hl}** — *{lbl}*")
+
+    # ----- Chart tab -----
+    with tab_chart:
+        st.subheader(f"{ticker} price history – {period}")
+        fig = go.Figure([
+            go.Candlestick(
+                x=hist.index,
+                open=hist.Open,
+                high=hist.High,
+                low=hist.Low,
+                close=hist.Close,
+            )
+        ])
+        fig.update_layout(height=400, xaxis_rangeslider_visible=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # ----- Intraday tab -----
+    with tab_intraday:
+        st.subheader("Intraday 1‑minute candles & entry signal")
+        if refresh_intraday:
+            load_intraday.clear()
+        intra_raw = load_intraday(ticker)
+        if intra_raw.empty:
+            st.info("Intraday data unavailable (market closed or API limit).")
+        else:
+            indf = compute_indicators(intra_raw)
+            if indf.empty or "Close" not in indf.columns:
+                st.warning("Indicators could not be computed for this symbol at the moment.")
+            else:
+                last = indf.iloc[-1]
+                entry_text = "✅ Entry signal!" if last["Entry"] else "No entry signal currently"
+                st.write(
+                    f"**Current price:** {last['Close']:.2f} | "
+                    f"SMA20: {last['SMA_20']:.2f} | "
+                    f"RSI14: {last['RSI_14']:.1f}"
+                )
+                st.success(entry_text) if last["Entry"] else st.info(entry_text)
+
+                fig2 = go.Figure()
+                fig2.add_trace(go.Scatter(x=indf.index, y=indf['Close'], mode='lines', name='Close'))
+                fig2.add_trace(go.Scatter(x=indf.index, y=indf['SMA_20'], mode='lines', name='SMA 20'))
+                entries = indf[indf['Entry']]
+                if not entries.empty:
+                    fig2.add_trace(
+                        go.Scatter(
+                            x=entries.index,
+                            y=entries['Close'],
+                            mode='markers',
+                            marker_symbol='triangle-up',
+                            marker_color='green',
+                            marker_size=10,
+                            name='Entry'
+                        )
+                    )
+                fig2.update_layout(height=400, xaxis_title='Time', yaxis_title='Price')
+                st.plotly_chart(fig2, use_container_width=True)
+
+    # ---------- Persistent footer disclaimer ----------
+    st.markdown(
+        "<hr style='margin-top:2em'>"
+        "<small><em>See full risk disclosure above. FinScope AI assumes no liability for trading losses.</em></small>",
+        unsafe_allow_html=True,
+    )
+
+
+if __name__ == "__main__":
+    main()
