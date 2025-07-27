@@ -1,203 +1,253 @@
+import asyncio
+import re
+from datetime import timedelta
+
+import httpx
+import numpy as np
+import pandas as pd
 import streamlit as st
-import requests
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import yfinance as yf
-import matplotlib.pyplot as plt
-import pandas as pd
 from prophet import Prophet
 from prophet.plot import plot_plotly
-from bs4 import BeautifulSoup
-import urllib.request
-import numpy as np
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+import plotly.graph_objects as go
 
-# Page setup
-st.set_page_config(page_title="FinScope AI", page_icon="📈", layout="wide")
+# -----------------------------------------------------------------------------
+# 🎛️  CONFIG
+# -----------------------------------------------------------------------------
 
-@st.cache_resource
-def load_model():
+st.set_page_config(
+    page_title="FinScope AI",
+    page_icon="📈",
+    layout="wide",
+)
+
+# -----------------------------------------------------------------------------
+# ⚙️  HELPERS & CACHING
+# -----------------------------------------------------------------------------
+
+@st.cache_resource(show_spinner=False, ttl=None, allow_output_mutation=True)
+def get_model():
+    """Load FinBERT sentiment model (cached across sessions)."""
     tokenizer = AutoTokenizer.from_pretrained("yiyanghkust/finbert-tone")
     model = AutoModelForSequenceClassification.from_pretrained("yiyanghkust/finbert-tone")
     return tokenizer, model
 
-tokenizer, model = load_model()
 
-def get_news(ticker, api_key):
-    url = f"https://newsapi.org/v2/everything?q={ticker}&sortBy=publishedAt&language=en&apiKey={api_key}"
-    response = requests.get(url)
-    articles = response.json().get("articles", [])[:5]
-    return [a["title"] for a in articles]
+def _clean_headline(h: str) -> str:
+    """Remove publisher suffixes e.g. ' - Bloomberg' and redundant whitespace."""
+    return re.sub(r"\s+-\s+[A-Za-z &]+$", "", h).strip()
 
-def get_sentiment(text):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True)
-    outputs = model(**inputs)
-    probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-    sentiments = ["Negative", "Neutral", "Positive"]
-    return sentiments[torch.argmax(probs)], probs.detach().numpy().flatten()
 
-def summarize_sentiments(sentiment_scores):
-    pos = sum(s == "Positive" for s in sentiment_scores)
-    neg = sum(s == "Negative" for s in sentiment_scores)
-    if pos >= 3:
+@st.cache_data(ttl=900, show_spinner=False)
+async def fetch_news(ticker: str, api_key: str) -> list[str]:
+    """Asynchronously pull latest news headlines (<=20) for the symbol."""
+    url = "https://newsapi.org/v2/everything"
+    params = {
+        "q": ticker,
+        "sortBy": "publishedAt",
+        "language": "en",
+        "pageSize": 20,
+        "apiKey": api_key,
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url, params=params)
+        r.raise_for_status()
+        return [_clean_headline(a["title"]) for a in r.json().get("articles", [])]
+
+
+@st.cache_data(ttl=60 * 60, show_spinner=False)
+def get_ticker_list() -> list[str]:
+    """Scrape a few trending tickers from Motley Fool (lazy fallback list)."""
+    import requests
+    from bs4 import BeautifulSoup
+
+    try:
+        html = requests.get("https://www.fool.com/investing/", timeout=10).text
+        soup = BeautifulSoup(html, "html.parser")
+        return list(
+            {
+                a.text
+                for a in soup.find_all("a")
+                if a.text.isupper() and len(a.text) <= 5
+            }
+        )[:10]
+    except Exception:
+        return ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]
+
+
+@st.cache_data(ttl=5 * 60, show_spinner=False)
+def load_price_history(symbol: str, period: str = "6mo") -> pd.DataFrame:
+    return yf.Ticker(symbol).history(period=period, auto_adjust=False)
+
+
+# -----------------------------------------------------------------------------
+# 📈  SENTIMENT ANALYSIS
+# -----------------------------------------------------------------------------
+
+def score_sentiment(headlines: list[str]) -> tuple[list[str], float]:
+    """Return list of sentiment labels and the average compound score."""
+    sentiments_map = {0: "Negative", 1: "Neutral", 2: "Positive"}
+    tokenizer, model = get_model()
+
+    inputs = tokenizer(headlines, return_tensors="pt", padding=True, truncation=True)
+    with torch.no_grad():
+        logits = model(**inputs).logits
+        probs = torch.softmax(logits, dim=-1).numpy()
+
+    labels = [sentiments_map[idx] for idx in probs.argmax(axis=1)]
+    # Weighted (+1, 0, -1) mean
+    weights = {
+        "Positive": 1,
+        "Neutral": 0,
+        "Negative": -1,
+    }
+    compound = float(np.mean([weights[l] for l in labels]))
+    return labels, compound
+
+
+def advice_from_score(score: float) -> str:
+    if score >= 0.5:
         return "BUY"
-    elif neg >= 3:
+    if score <= -0.5:
         return "SELL"
     return "HOLD"
 
-def scrape_motley_fool():
-    url = "https://www.fool.com/investing/"
-    try:
-        page = urllib.request.urlopen(url)
-        soup = BeautifulSoup(page, "html.parser")
-        tickers = list(set([a.text for a in soup.find_all('a') if a.text.isupper() and len(a.text) <= 5]))
-        return tickers[:10]
-    except:
-        return []
 
-# UI
-st.title("📈 FinScope AI")
-st.markdown("""
-    <style>
-    .big-font { font-size: 24px !important; color: #1f77b4; }
-    </style>
-""", unsafe_allow_html=True)
-st.markdown("<p class='big-font'>AI-Powered Stock Sentiment, Technicals & Forecasting Tool</p>", unsafe_allow_html=True)
-st.markdown("---")
+# -----------------------------------------------------------------------------
+# 🔮  FORECASTING (Prophet)
+# -----------------------------------------------------------------------------
 
-# Sidebar
-with st.sidebar:
-    st.header("🔍 Stock Selection")
-    default_tickers = scrape_motley_fool()
-    company_search = st.text_input("Search company name or ticker", value="AAPL")
-    ticker = yf.Ticker(company_search).info.get("symbol", company_search.upper())
+@st.cache_data(ttl=12 * 60 * 60, show_spinner=False)
+def prophet_forecast(symbol: str, days: int = 7):
+    df = (
+        yf.download(symbol, period="1y", progress=False)[["Close"]]
+        .dropna()
+        .reset_index()
+        .rename(columns={"Date": "ds", "Close": "y"})
+    )
+    df["y"] = np.log(df["y"])
+    model = Prophet(daily_seasonality=True)
+    model.fit(df)
+    future = model.make_future_dataframe(periods=days)
+    fcst = model.predict(future)
+    fcst[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(
+        fcst[["yhat", "yhat_lower", "yhat_upper"]]
+    )
+    return model, fcst.tail(days)
 
-# News API key
-newsapi_key = st.secrets.get("newsapi_key", "YOUR_NEWS_API_KEY")
 
-if ticker and newsapi_key != "YOUR_NEWS_API_KEY":
-    stock = yf.Ticker(ticker)
-    hist = stock.history(period="6mo")
+# -----------------------------------------------------------------------------
+# 🖥️   MAIN UI
+# -----------------------------------------------------------------------------
 
-    tab1, tab2 = st.tabs(["📊 Stock Analysis", "📐 Technical Analysis"])
+def main() -> None:
+    st.title("📈 FinScope AI")
+    st.markdown(
+        "AI‑powered dashboard combining news sentiment, price history and short‑term forecasts."
+    )
+    st.markdown("---")
 
-    # TAB 1 — Sentiment & Price Chart
-    with tab1:
-        col1, col2 = st.columns(2)
+    # Sidebar – stock selection ---------------------------------------------
+    with st.sidebar:
+        st.header("🔍 Stock Selection")
+        default_list = get_ticker_list()
+        choice = st.text_input(
+            "Company name or ticker (e.g. AAPL)", value=default_list[0] if default_list else "AAPL"
+        ).strip().upper()
 
-        with col1:
-            st.subheader("📰 News Sentiment Analysis")
-            headlines = get_news(ticker, newsapi_key)
-            sentiments = []
-            for h in headlines:
-                sent, _ = get_sentiment(h)
-                sentiments.append(sent)
-                st.markdown(f"- **{h}** — *{sent}*")
-            recommendation = summarize_sentiments(sentiments)
-            st.success(f"### 📊 Recommendation: **{recommendation}**")
+        # Validate ticker pattern
+        if not re.fullmatch(r"[A-Z.\-]{1,5}", choice):
+            st.warning("Please enter a valid ticker symbol (1–5 capital letters).")
+            st.stop()
 
-        with col2:
-            st.subheader("📉 Price Chart")
-            if not hist.empty:
-                fig, ax = plt.subplots()
-                ax.plot(hist.index, hist["Close"], label="Close Price", color='blue')
-                ax.set_title(f"{ticker.upper()} - Last 6 Months")
-                ax.set_xlabel("Date")
-                ax.set_ylabel("Price (USD)")
-                ax.legend()
-                ax.grid(True)
-                st.pyplot(fig)
-            else:
-                st.warning("No price data found.")
+        period = st.selectbox("History period", ["1mo", "3mo", "6mo", "1y", "5y"], index=2)
 
-    # TAB 2 — Technicals & Forecast
-    with tab2:
-        st.subheader("📐 Technical Indicators")
-        if not hist.empty:
-            df = hist.copy()
-            df["MA20"] = df["Close"].rolling(window=20).mean()
-            delta = df["Close"].diff()
-            gain = delta.clip(lower=0)
-            loss = -delta.clip(upper=0)
-            avg_gain = gain.rolling(window=14).mean()
-            avg_loss = loss.rolling(window=14).mean()
-            rs = avg_gain / avg_loss
-            df["RSI"] = 100 - (100 / (1 + rs))
-            exp1 = df["Close"].ewm(span=12, adjust=False).mean()
-            exp2 = df["Close"].ewm(span=26, adjust=False).mean()
-            df["MACD"] = exp1 - exp2
-            df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
+    # Secrets gate -----------------------------------------------------------
+    if "newsapi_key" not in st.secrets:
+        st.error("🔑  Add your NewsAPI key to Streamlit secrets to enable sentiment analysis.")
+        st.stop()
 
-            fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
-            axs[0].plot(df.index, df["Close"], label="Close Price")
-            axs[0].plot(df.index, df["MA20"], label="MA20", linestyle="--")
-            axs[0].set_title("Price & Moving Average")
-            axs[0].legend()
+    news_key: str = st.secrets["newsapi_key"]
 
-            axs[1].plot(df.index, df["RSI"], color="orange", label="RSI")
-            axs[1].axhline(70, color='red', linestyle='--')
-            axs[1].axhline(30, color='green', linestyle='--')
-            axs[1].legend()
-            axs[1].set_title("Relative Strength Index")
+    # ---------------------------------------------------------------------
+    # DATA FETCHING
+    # ---------------------------------------------------------------------
+    hist = load_price_history(choice, period)
+    if hist.empty:
+        st.error("No price data returned – please verify the ticker.")
+        st.stop()
 
-            axs[2].plot(df.index, df["MACD"], label="MACD", color="blue")
-            axs[2].plot(df.index, df["Signal"], label="Signal", color="magenta")
-            axs[2].axhline(0, color='black', linestyle='--')
-            axs[2].legend()
-            axs[2].set_title("MACD")
+    # Async news fetch
+    with st.spinner("Fetching latest headlines …"):
+        headlines = asyncio.run(fetch_news(choice, news_key))[:5]
 
-            st.pyplot(fig)
+    # Sentiment scoring -----------------------------------------------------
+    if headlines:
+        labels, compound = score_sentiment(headlines)
+        recommendation = advice_from_score(compound)
+    else:
+        labels, compound, recommendation = [], 0.0, "HOLD"
 
-        # Forecasting with Prophet
-        # Forecasting with Linear Regression
-        # Forecasting with Linear Regression
-        st.subheader("🔮 7-Day Forecast (Linear Regression)")
+    # KPI metrics -----------------------------------------------------------
+    col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
+    col_kpi1.metric("Avg sentiment", f"{compound:+.2f}")
+    day_change = (hist.Close.iloc[-1] - hist.Close.iloc[-2]) / hist.Close.iloc[-2] * 100
+    col_kpi2.metric("Price Δ 1‑day", f"{day_change:+.2f}%")
+    col_kpi3.metric("Advice", recommendation)
+
+    # ---------------------------------------------------------------------
+    # LAYOUT – Tabs
+    # ---------------------------------------------------------------------
+
+    tab_news, tab_chart, tab_forecast = st.tabs([
+        "📰 News", "📉 Chart", "🔮 7‑day Forecast",
+    ])
+
+    # ---------------- News tab -------------------------------------------
+    with tab_news:
+        st.subheader("Latest headlines")
+        if not headlines:
+            st.write("No recent news found.")
+        else:
+            for h, lbl in zip(headlines, labels):
+                st.markdown(f"- **{h}** — *{lbl}*")
+
+    # ---------------- Chart tab ------------------------------------------
+    with tab_chart:
+        st.subheader(f"{choice} price history – {period}")
+        fig = go.Figure(
+            data=[
+                go.Candlestick(
+                    x=hist.index,
+                    open=hist["Open"],
+                    high=hist["High"],
+                    low=hist["Low"],
+                    close=hist["Close"],
+                    name="Price",
+                )
+            ]
+        )
+        fig.update_layout(height=400, xaxis_rangeslider_visible=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # ---------------- Forecast tab ---------------------------------------
+    with tab_forecast:
+        st.subheader("Prophet 7‑day forecast (experimental)")
         try:
-            from sklearn.linear_model import LinearRegression
-
-            df_lr = yf.download(ticker, period="6mo", progress=False)[["Close"]].dropna().reset_index()
-            df_lr.rename(columns={"Date": "ds", "Close": "y"}, inplace=True)
-            df_lr["ds"] = pd.to_datetime(df_lr["ds"])
-            df_lr["ds_ordinal"] = df_lr["ds"].map(pd.Timestamp.toordinal)
-
-            # Prepare training data
-            X = df_lr["ds_ordinal"].values.reshape(-1, 1)
-            y = df_lr["y"].values
-
-            model = LinearRegression()
-            model.fit(X, y)
-
-            # Predict next 7 days
-            last_date = df_lr["ds"].max()
-            future_dates = [last_date + pd.Timedelta(days=i) for i in range(1, 8)]
-            future_ordinals = np.array([d.toordinal() for d in future_dates]).reshape(-1, 1)
-            future_preds = model.predict(future_ordinals).flatten()
-
-            # ✅ Fix: Ensure 1D lists
-            forecast_display = pd.DataFrame({
-                "ds": [d.date() for d in future_dates],
-                "yhat": future_preds.tolist()
-            })
-
-            st.write("Forecasted Prices (Next 7 Days):")
-            st.dataframe(forecast_display)
-
-            # Plot
-            fig, ax = plt.subplots()
-            ax.plot(df_lr["ds"], df_lr["y"], label="Historical Close")
-            ax.plot(forecast_display["ds"], forecast_display["yhat"], label="Forecast", color="orange", linestyle="--")
-            ax.set_title(f"{ticker.upper()} Forecast (Linear Regression)")
-            ax.set_xlabel("Date")
-            ax.set_ylabel("Price (USD)")
-            ax.legend()
-            ax.grid(True)
-            st.pyplot(fig)
-
-        except Exception as e:
-            st.error(f"⚠️ Forecast error: {e}")
+            model, fcst = prophet_forecast(choice, 7)
+            st.dataframe(
+                fcst[["ds", "yhat", "yhat_lower", "yhat_upper"]].set_index("ds"),
+                use_container_width=True,
+                height=220,
+            )
+            st.plotly_chart(plot_plotly(model, model.predict(model.make_future_dataframe(7))), use_container_width=True)
+        except Exception as err:
+            st.error(f"Forecast failed: {err}")
 
 
+# -----------------------------------------------------------------------------
 
-
-
-else:
-    st.info("Enter a valid stock ticker and set your NewsAPI key in `.streamlit/secrets.toml`.")
+if __name__ == "__main__":
+    main()
