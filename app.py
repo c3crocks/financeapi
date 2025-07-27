@@ -189,6 +189,45 @@ def main():
         if intra_raw.empty:
             st.info("Intraday data unavailable (market closed?).")
         else:
-            indf = compute_indicators(intra_raw)
+                        indf = compute_indicators(intra_raw)
             if indf.empty or "Close" not in indf.columns:
-                st.warning("Indicators could not be computed.
+                st.warning("Indicators could not be computed for this symbol at the moment.")
+            else:
+                last = indf.iloc[-1]
+                entry_text = "✅ Entry signal!" if last["Entry"] else "No entry signal currently"
+                st.write(
+                    f"**Current price:** {last['Close']:.2f} | "
+                    f"SMA20: {last['SMA_20']:.2f} | "
+                    f"RSI14: {last['RSI_14']:.1f}"
+                )
+                st.success(entry_text) if last["Entry"] else st.info(entry_text)
+
+                fig2 = go.Figure()
+                fig2.add_trace(go.Scatter(x=indf.index, y=indf['Close'], mode='lines', name='Close'))
+                fig2.add_trace(go.Scatter(x=indf.index, y=indf['SMA_20'], mode='lines', name='SMA 20'))
+                entries = indf[indf['Entry']]
+                if not entries.empty:
+                    fig2.add_trace(
+                        go.Scatter(
+                            x=entries.index,
+                            y=entries['Close'],
+                            mode='markers',
+                            marker_symbol='triangle-up',
+                            marker_color='green',
+                            marker_size=10,
+                            name='Entry'
+                        )
+                    )
+                fig2.update_layout(height=400, xaxis_title='Time', yaxis_title='Price')
+                st.plotly_chart(fig2, use_container_width=True)
+
+    # ---------- Disclaimer ----------
+    st.markdown(
+        "<hr style='margin-top:2em'>"
+        "<small><em>Disclaimer: FinScope AI is provided for informational and educational purposes only and should not be construed as financial advice. Trading and investing involve substantial risk, and you should consult a qualified financial professional before making any investment decisions. The creators and hosts of this application assume no liability for any losses or damages arising from its use.</em></small>",
+        unsafe_allow_html=True,
+    )
+
+
+if __name__ == "__main__":
+    main()
