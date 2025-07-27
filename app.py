@@ -33,41 +33,21 @@ if "disclaimer_accepted" not in st.session_state:
     st.session_state.disclaimer_accepted = False
 
 if not st.session_state.disclaimer_accepted:
-    st.markdown(
-        f"""
-        <style>
-        .fs-overlay {{ position: fixed; inset: 0; background: rgba(0,0,0,0.65); display:flex; align-items:center; justify-content:center; z-index:9999; }}
-        .fs-box {{ background:#fff; color:#000; padding:2rem; width:90%; max-width:800px; border-radius:8px; max-height:80vh; overflow-y:auto; }}
-        </style>
-        <div class='fs-overlay'>
-          <div class='fs-box'>
-            {DISCLAIMER_MD}
-            <br><br><center><button onclick="window.parent.postMessage('accept','*')" style='padding:0.6rem 1.2rem; font-size:1rem;'>I Acknowledge and Agree</button></center>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    css_html = (
+        "<style>"
+        ".fs-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);"
+        "display:flex;align-items:center;justify-content:center;z-index:9999;}"
+        ".fs-box{background:#fff;color:#000;padding:2rem;width:92%;max-width:800px;"
+        "border-radius:8px;max-height:80vh;overflow-y:auto;}"
+        "</style>"
+        "<div class='fs-overlay'><div class='fs-box'>" + DISCLAIMER_MD + "</div></div>"
     )
-    # Listen for the button click via postMessage (works in Streamlit iframe sandbox)
-    js = """
-    <script>
-    window.addEventListener('message', (e)=>{
-      if(e.data==='accept'){
-        const doc = window.parent.document;
-        const overlay = doc.querySelector('.fs-overlay');
-        if(overlay) overlay.remove();
-        fetch('/?_streamlit_accept=1').then(()=>window.location.reload());
-      }
-    });
-    </script>
-    """
-    st.components.v1.html(js, height=0)
-
-    # Fallback for environments where JS postMessage is blocked
-    if st.query_params.get("_streamlit_accept") == ["1"]:
+    # Inject CSS & overlay
+    st.markdown(css_html, unsafe_allow_html=True)
+    # Acknowledge button (normal Streamlit button)
+    if st.button("I Acknowledge and Agree", key="accept_disclaimer"):
         st.session_state.disclaimer_accepted = True
         st.experimental_rerun()
-
     st.stop()
     st.stop()
 
