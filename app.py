@@ -72,9 +72,11 @@ def load_price_history(symbol: str, period: str = "6mo") -> pd.DataFrame:
 @st.cache_data(ttl=120, show_spinner=False)
 def load_intraday(symbol: str) -> pd.DataFrame:
     """1‑minute candles for the current trading day (Yahoo)."""
-    # Yahoo only returns last 7 days at 1m; fetch 1d and slice today
     df = yf.download(symbol, interval="1m", period="1d", progress=False)
-    df = df.tz_localize(None)  # strip timezone for simplicity
+    if isinstance(df.columns, pd.MultiIndex):
+        # Flatten multi‑level columns that Yahoo returns when group_by="ticker"
+        df.columns = df.columns.get_level_values(-1)
+    df = df.tz_localize(None)
     return df
 
 # -----------------------------------------------------------------------------
@@ -91,7 +93,7 @@ def score_sentiment(headlines: list[str]) -> tuple[list[str], float]:
         probs = torch.softmax(model(**inputs).logits, dim=-1).numpy()
 
     labels = [id2label[int(idx)] for idx in probs.argmax(axis=1)]
-    compound = float(np.mean([weights[l] for l in labels]))
+    compound = float(np.mean([weights[l] for l in labels])) if labels else 0.0
     return [l.capitalize() for l in labels], compound
 
 
@@ -103,16 +105,34 @@ def advice_from_score(score: float) -> str:
 # -----------------------------------------------------------------------------
 
 def compute_intraday_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """Return DataFrame with SMA, RSI and entry signal column.
+
+    The function first flattens any MultiIndex columns that could break
+    element‑wise comparisons, then calculates SMA‑20 and RSI‑14. An *Entry*
+    boolean is True at the first bar where price closes above its SMA‑20
+    with an RSI < 70.
+    """
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(-1)
+
+    # Ensure required column exists
+    if "Close" not in df.columns:
+        raise ValueError("Intraday DataFrame missing 'Close' column")
+
     df = df.copy()
-    df["SMA_5"] = df["Close"].rolling(5).mean()
     df["SMA_20"] = df["Close"].rolling(20).mean()
+
     delta = df["Close"].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    rs = gain / loss
-    df["RSI_14"] = 100 - (100 / (1 + rs))
-    # Entry signal: Price crosses above SMA_20 while RSI < 70
-    df["Entry"] = (df["Close"].shift(1) < df["SMA_20"].shift(1)) & (df["Close"] > df["SMA_20"]) & (df["RSI_14"] < 70)
+    gain = delta.clip(lower=0).rolling(14).mean()
+    loss = (-delta.clip(upper=0)).rolling(14).mean()
+    rs = gain / loss.replace(0, np.nan)
+    df["RSI_14"] = 100 - 100 / (1 + rs)
+
+    df["Entry"] = (
+        (df["Close"].shift(1) < df["SMA_20"].shift(1)) &
+        (df["Close"] > df["SMA_20"]) &
+        (df["RSI_14"] < 70)
+    )
     return df
 
 # -----------------------------------------------------------------------------
@@ -134,31 +154,33 @@ def main() -> None:
         period = st.selectbox("History period", ["1mo", "3mo", "6mo", "1y", "5y"], 2)
         refresh = st.button("🔄 Refresh intraday")
 
+    # Secrets
     if "newsapi_key" not in st.secrets:
         st.error("🔑 Add your NewsAPI key to Streamlit secrets to enable sentiment analysis.")
         st.stop()
     news_key = st.secrets["newsapi_key"]
 
-    # ---------------- Price history ----------------
+    # Price history
     hist = load_price_history(ticker, period)
     if hist.empty:
         st.error("No price data returned – verify the ticker.")
         st.stop()
 
-    # ---------------- Sentiment ----------------
+    # Headlines & sentiment
     with st.spinner("Fetching headlines …"):
         headlines = fetch_news(ticker, news_key)[:5]
-    labels, compound = ([], 0.0) if not headlines else score_sentiment(headlines)
+    labels, compound = score_sentiment(headlines) if headlines else ([], 0.0)
     rec = advice_from_score(compound)
 
-    # KPI row
+    # KPI
     k1, k2, k3 = st.columns(3)
     k1.metric("Avg sentiment", f"{compound:+.2f}")
-    day_change = (hist.Close.iloc[-1] - hist.Close.iloc[-2]) / hist.Close.iloc[-2] * 100
-    k2.metric("Price Δ 1‑day", f"{day_change:+.2f}%")
+    if len(hist) > 1:
+        day_change = (hist.Close.iloc[-1] - hist.Close.iloc[-2]) / hist.Close.iloc[-2] * 100
+        k2.metric("Price Δ 1‑day", f"{day_change:+.2f}%")
     k3.metric("Advice", rec)
 
-    # ---------------- Tabs ----------------
+    # Tabs
     tab_news, tab_chart, tab_intraday = st.tabs(["📰 News", "📉 Chart", "⏱️ Intraday"])
 
     with tab_news:
@@ -179,25 +201,23 @@ def main() -> None:
 
     with tab_intraday:
         st.subheader("Intraday 1‑minute candles & entry signal")
-        intraday_df = load_intraday(ticker) if not refresh else load_intraday.clear() or load_intraday(ticker)
+        if refresh:
+            load_intraday.clear()  # invalidate cache on demand
+        intraday_df = load_intraday(ticker)
         if intraday_df.empty:
             st.write("Intraday data not available outside market hours.")
         else:
             indf = compute_intraday_indicators(intraday_df)
             last = indf.iloc[-1]
             entry_text = "✅ Entry signal!" if last["Entry"] else "No entry signal currently"
-            st.write(f"**Current price:** {last['Close']:.2f} | SMA20: {last['SMA_20']:.2f} | RSI14: {last['RSI_14']:.1f}")
+            st.write(
+                f"**Current price:** {last['Close']:.2f} | "
+                f"SMA20: {last['SMA_20']:.2f} | "
+                f"RSI14: {last['RSI_14']:.1f}"
+            )
             st.success(entry_text) if last["Entry"] else st.info(entry_text)
 
             # plot
             fig2 = go.Figure()
             fig2.add_trace(go.Scatter(x=indf.index, y=indf["Close"], mode="lines", name="Close"))
-            fig2.add_trace(go.Scatter(x=indf.index, y=indf["SMA_20"], mode="lines", name="SMA 20"))
-            figsigs = indf[indf["Entry"]]
-            fig2.add_trace(go.Scatter(mode="markers", x=figsigs.index, y=figsigs["Close"], name="Entry", marker_symbol="triangle-up", marker_color="green", marker_size=10))
-            fig2.update_layout(height=400, xaxis_title="Time", yaxis_title="Price")
-            st.plotly_chart(fig2, use_container_width=True)
-
-
-if __name__ == "__main__":
-    main()
+            fig2.add
