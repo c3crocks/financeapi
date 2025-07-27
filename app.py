@@ -15,6 +15,32 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 st.set_page_config(page_title="FinScope AI", page_icon="📈", layout="wide")
 
 # -----------------------------------------------------------------------------
+# 🔒 Pop‑up Disclaimer (must accept before app runs)
+# -----------------------------------------------------------------------------
+
+DISCLAIMER_MD = (
+    "**CRITICAL RISK DISCLAIMER**  \n"
+    "FinScope AI is an *experimental* analytics tool. All market data, headlines, and model outputs are provided **“as‑is”** without any warranty of accuracy, completeness, or timeliness.  \n\n"
+    "* **Not financial advice —** Nothing on this site constitutes investment, trading, or other professional advice.  \n"
+    "* **No performance guarantees —** Past results, back‑tests, or model forecasts do **not** guarantee future returns.  \n"
+    "* **Market risk —** Trading equities, options, futures, or crypto involves the risk of substantial loss. You may lose more than your initial investment.  \n"
+    "* **Data & model errors —** News feeds, price quotes, and technical calculations may be delayed, incorrect, or unavailable; ML sentiment models can misclassify.  \n"
+    "* **Third‑party content —** Links and headlines are the property of their respective publishers; FinScope AI neither endorses nor verifies them.  \n\n"
+    "By using this application you acknowledge that **you** bear full responsibility for your trading decisions and agree to hold the developers, contributors, and hosting providers **harmless from any direct or consequential losses**. Always consult a licensed financial professional before acting on any information presented here."
+)
+
+if "disclaimer_accepted" not in st.session_state:
+    st.session_state.disclaimer_accepted = False
+
+if not st.session_state.disclaimer_accepted:
+    with st.modal("Risk Disclaimer – Please Read"):
+        st.markdown(DISCLAIMER_MD)
+        if st.button("I Acknowledge and Agree"):
+            st.session_state.disclaimer_accepted = True
+    # Halt the script until user accepts
+    st.stop()
+
+# -----------------------------------------------------------------------------
 # ⚙️ HELPERS & CACHING
 # -----------------------------------------------------------------------------
 
@@ -123,7 +149,7 @@ def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     st.title("📈 FinScope AI")
-    st.markdown("AI‑powered dashboard: news sentiment, price history & intraday signals.")
+    st.markdown("AI-powered dashboard: news sentiment, price history & intraday signals.")
     st.markdown("---")
 
     # ---------- Sidebar ----------
@@ -132,7 +158,7 @@ def main():
         ticker_defaults = default_tickers()
         ticker = st.text_input("Ticker (e.g. AAPL)", value=ticker_defaults[0] if ticker_defaults else "AAPL").strip().upper()
         if not re.fullmatch(r"[A-Z.\-]{1,5}", ticker):
-            st.warning("Enter a valid ticker (1‑5 capital letters).")
+            st.warning("Enter a valid ticker (1-5 capital letters).")
             st.stop()
         period = st.selectbox("History period", ["1mo", "3mo", "6mo", "1y", "5y"], index=2)
         refresh_intraday = st.button("🔄 Refresh intraday")
@@ -159,75 +185,12 @@ def main():
     k1.metric("Avg sentiment", f"{compound:+.2f}", help="–1 (all negative) … +1 (all positive). Based on last 5 headlines.")
     if len(hist) > 1:
         dchg = (hist.Close.iloc[-1] - hist.Close.iloc[-2]) / hist.Close.iloc[-2] * 100
-        k2.metric("Price Δ 1‑day", f"{dchg:+.2f}%", help="Close‑to‑close percent change.")
+        k2.metric("Price Δ 1-day", f"{dchg:+.2f}%", help="Close-to-close percent change.")
     else:
-        k2.metric("Price Δ 1‑day", "–")
+        k2.metric("Price Δ 1-day", "–")
     k3.metric("Advice", rec, help="BUY if sentiment ≥ +0.5, SELL if ≤ –0.5, else HOLD.")
 
     # ---------- Tabs ----------
     tab_news, tab_chart, tab_intraday = st.tabs(["📰 News", "📉 Chart", "⏱️ Intraday"])
 
     with tab_news:
-        st.subheader("Latest headlines")
-        if not headlines:
-            st.write("No recent news.")
-        else:
-            for h, lbl in zip(headlines, labels):
-                st.markdown(f"- **{h}** — *{lbl}*")
-
-    with tab_chart:
-        st.subheader(f"{ticker} price history – {period}")
-        fig = go.Figure([go.Candlestick(x=hist.index, open=hist.Open, high=hist.High, low=hist.Low, close=hist.Close)])
-        fig.update_layout(height=400, xaxis_rangeslider_visible=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with tab_intraday:
-        st.subheader("Intraday 1‑minute candles & entry signal")
-        if refresh_intraday:
-            load_intraday.clear()
-        intra_raw = load_intraday(ticker)
-        if intra_raw.empty:
-            st.info("Intraday data unavailable (market closed?).")
-        else:
-            indf = compute_indicators(intra_raw)
-            if indf.empty or "Close" not in indf.columns:
-                st.warning("Indicators could not be computed for this symbol at the moment.")
-            else:
-                last = indf.iloc[-1]
-                entry_text = "✅ Entry signal!" if last["Entry"] else "No entry signal currently"
-                st.write(
-                    f"**Current price:** {last['Close']:.2f} | "
-                    f"SMA20: {last['SMA_20']:.2f} | "
-                    f"RSI14: {last['RSI_14']:.1f}"
-                )
-                st.success(entry_text) if last["Entry"] else st.info(entry_text)
-
-                fig2 = go.Figure()
-                fig2.add_trace(go.Scatter(x=indf.index, y=indf['Close'], mode='lines', name='Close'))
-                fig2.add_trace(go.Scatter(x=indf.index, y=indf['SMA_20'], mode='lines', name='SMA 20'))
-                entries = indf[indf['Entry']]
-                if not entries.empty:
-                    fig2.add_trace(
-                        go.Scatter(
-                            x=entries.index,
-                            y=entries['Close'],
-                            mode='markers',
-                            marker_symbol='triangle-up',
-                            marker_color='green',
-                            marker_size=10,
-                            name='Entry'
-                        )
-                    )
-                fig2.update_layout(height=400, xaxis_title='Time', yaxis_title='Price')
-                st.plotly_chart(fig2, use_container_width=True)
-
-    # ---------- Disclaimer ----------
-    st.markdown(
-        "<hr style='margin-top:2em'>"
-        "<small><em>Disclaimer: FinScope AI is provided for informational and educational purposes only and should not be construed as financial advice. Trading and investing involve substantial risk, and you should consult a qualified financial professional before making any investment decisions. The creators and hosts of this application assume no liability for any losses or damages arising from its use.</em></small>",
-        unsafe_allow_html=True,
-    )
-
-
-if __name__ == "__main__":
-    main()
