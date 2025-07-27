@@ -12,26 +12,17 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 # 🔒 Pop‑up Disclaimer (must accept before app runs)
 # -----------------------------------------------------------------------------
 
-DISCLAIMER_MD = (
-    "**CRITICAL RISK DISCLAIMER**
+DISCLAIMER_MD = """**CRITICAL RISK DISCLAIMER**
 
-"
-    "FinScope AI is an *experimental* analytics tool. All market data, headlines, and model outputs are provided **“as‑is”** without any warranty of accuracy, completeness, or timeliness.
+FinScope AI is an *experimental* analytics tool. All market data, headlines, and model outputs are provided **“as‑is”** without any warranty of accuracy, completeness, or timeliness.
 
-"
-    "* **Not financial advice —** Nothing on this site constitutes investment, trading, or other professional advice.
-"
-    "* **No performance guarantees —** Past results, back‑tests, or model forecasts do **not** guarantee future returns.
-"
-    "* **Market risk —** Trading equities, options, futures, or crypto involves the risk of substantial loss. You may lose more than your initial investment.
-"
-    "* **Data & model errors —** News feeds, price quotes, and technical calculations may be delayed, incorrect, or unavailable; ML sentiment models can misclassify.
-"
-    "* **Third‑party content —** Links and headlines are the property of their respective publishers; FinScope AI neither endorses nor verifies them.
+* **Not financial advice —** Nothing on this site constitutes investment, trading, or other professional advice.
+* **No performance guarantees —** Past results, back‑tests, or model forecasts do **not** guarantee future returns.
+* **Market risk —** Trading equities, options, futures, or crypto involves the risk of substantial loss. You may lose more than your initial investment.
+* **Data & model errors —** News feeds, price quotes, and technical calculations may be delayed, incorrect, or unavailable; ML sentiment models can misclassify.
+* **Third‑party content —** Links and headlines are the property of their respective publishers; FinScope AI neither endorses nor verifies them.
 
-"
-    "By using this application you acknowledge that **you** bear full responsibility for your trading decisions and agree to hold the developers, contributors, and hosting providers **harmless from any direct or consequential losses**. Always consult a licensed financial professional before acting on any information presented here."
-)
+By using this application you acknowledge that **you** bear full responsibility for your trading decisions and agree to hold the developers, contributors, and hosting providers **harmless from any direct or consequential losses**. Always consult a licensed financial professional before acting on any information presented here."""
 
 if not st.session_state.get("disclaimer_accepted", False):
     # CSS overlay
