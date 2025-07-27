@@ -213,6 +213,7 @@ def main() -> None:
             for h, lbl in zip(headlines, labels):
                 st.markdown(f"- **{h}** — *{lbl}*")
 
+    
     # ---------------- Chart tab ------------------------------------------
     with tab_chart:
         st.subheader(f"{choice} price history – {period}")
