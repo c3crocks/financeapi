@@ -211,7 +211,7 @@ def main() -> None:
             model, fcst = prophet_forecast(choice, 7)
             st.dataframe(
                 fcst[["ds", "yhat", "yhat_lower", "yhat_upper"]]
-                .set_index("ds"),
+                .set_index(["ds"]),
                 use_container_width=True,
                 height=220,
             )
