@@ -215,33 +215,37 @@ def main() -> None:
         if intraday_df.empty:
             st.write("Intraday data not available outside market hours.")
         else:
-            indf = compute_intraday_indicators(intraday_df)
-            last = indf.iloc[-1]
-            entry_text = "✅ Entry signal!" if last["Entry"] else "No entry signal currently"
-            st.write(
-                f"**Current price:** {last['Close']:.2f} | "
-                f"SMA20: {last['SMA_20']:.2f} | "
-                f"RSI14: {last['RSI_14']:.1f}"
-            )
-            st.success(entry_text) if last["Entry"] else st.info(entry_text)
-
-            # plot
-            fig2 = go.Figure()
-            fig2.add_trace(go.Scatter(x=indf.index, y=indf["Close"], mode="lines", name="Close"))
-            fig2.add_trace(go.Scatter(x=indf.index, y=indf["SMA_20"], mode="lines", name="SMA 20"))
-            entry_df = indf[indf["Entry"]]
-            fig2.add_trace(
-                go.Scatter(
-                    x=entry_df.index,
-                    y=entry_df["Close"],
-                    mode="markers",
-                    marker_symbol="triangle-up",
-                    marker_color="green",
-                    marker_size=10,
-                    name="Entry",
+                        indf = compute_intraday_indicators(intraday_df)
+            if indf.empty or "Close" not in indf.columns:
+                st.warning("Unable to compute intraday indicators for this symbol right now.")
+            else:
+                last = indf.iloc[-1]
+                entry_text = "✅ Entry signal!" if last["Entry"] else "No entry signal currently"
+                st.write(
+                    f"**Current price:** {last['Close']:.2f} | "
+                    f"SMA20: {last['SMA_20']:.2f} | "
+                    f"RSI14: {last['RSI_14']:.1f}"
                 )
-            )
-            fig2.update_layout(height=400, xaxis_title="Time", yaxis_title="Price")
+                st.success(entry_text) if last["Entry"] else st.info(entry_text)
+
+                fig2 = go.Figure()
+                fig2.add_trace(go.Scatter(x=indf.index, y=indf["Close"], mode="lines", name="Close"))
+                fig2.add_trace(go.Scatter(x=indf.index, y=indf["SMA_20"], mode="lines", name="SMA 20"))
+                entry_df = indf[indf["Entry"]]
+                if not entry_df.empty:
+                    fig2.add_trace(
+                        go.Scatter(
+                            x=entry_df.index,
+                            y=entry_df["Close"],
+                            mode="markers",
+                            marker_symbol="triangle-up",
+                            marker_color="green",
+                            marker_size=10,
+                            name="Entry",
+                        )
+                    )
+                fig2.update_layout(height=400, xaxis_title="Time", yaxis_title="Price")
+                st.plotly_chart(fig2, use_container_width=True)(height=400, xaxis_title="Time", yaxis_title="Price")
             st.plotly_chart(fig2, use_container_width=True)
 
 
