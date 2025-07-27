@@ -205,7 +205,7 @@ def main() -> None:
     )
 
     # Tabs -------------------------------------------------------------
-    tab_news, tab_chart, tab_intraday = st.tabs(["📰 News", "📉 Chart", "⏱️ Intraday"]), tab_chart, tab_intraday = st.tabs(["📰 News", "📉 Chart", "⏱️ Intraday"])
+    tab_news, tab_chart, tab_intraday = st.tabs(["📰 News", "📉 Chart", "⏱️ Intraday"])
 
     with tab_news:
         st.subheader("Latest headlines")
