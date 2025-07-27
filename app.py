@@ -38,8 +38,11 @@ if not st.session_state.disclaimer_accepted:
         st.markdown(DISCLAIMER_MD)
         if st.button("I Acknowledge and Agree"):
             st.session_state.disclaimer_accepted = True
-            placeholder.empty()
-            st.experimental_rerun()
+                        placeholder.empty()
+            if hasattr(st, "experimental_rerun"):
+                st.experimental_rerun()
+            else:
+                st.warning("Please refresh the page to continue.")
     st.stop()
 
 # -----------------------------------------------------------------------------
