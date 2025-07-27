@@ -17,7 +17,7 @@ import plotly.graph_objects as go
 # -----------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="FinScope AI",
+    page_title="FinScope AI",
     page_icon="📈",
     layout="wide",
 )
@@ -56,7 +56,7 @@ async def fetch_news(ticker: str, api_key: str) -> list[str]:
         return [_clean_headline(a["title"]) for a in r.json().get("articles", [])]
 
 
-@st.cache_data(ttl=60 * 60, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_ticker_list() -> list[str]:
     """Scrape a few trending tickers from Motley Fool (lazy fallback list)."""
     import requests
@@ -65,21 +65,18 @@ def get_ticker_list() -> list[str]:
     try:
         html = requests.get("https://www.fool.com/investing/", timeout=10).text
         soup = BeautifulSoup(html, "html.parser")
-        return list(
-            {
-                a.text
-                for a in soup.find_all("a")
-                if a.text.isupper() and len(a.text) <= 5
-            }
-        )[:10]
+        return [
+            a.text
+            for a in soup.find_all("a")
+            if a.text.isupper() and len(a.text) <= 5
+        ][:10]
     except Exception:
         return ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]
 
 
-@st.cache_data(ttl=5 * 60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def load_price_history(symbol: str, period: str = "6mo") -> pd.DataFrame:
     return yf.Ticker(symbol).history(period=period, auto_adjust=False)
-
 
 # -----------------------------------------------------------------------------
 # 📈  SENTIMENT ANALYSIS
@@ -96,12 +93,7 @@ def score_sentiment(headlines: list[str]) -> tuple[list[str], float]:
         probs = torch.softmax(logits, dim=-1).numpy()
 
     labels = [sentiments_map[idx] for idx in probs.argmax(axis=1)]
-    # Weighted (+1, 0, -1) mean
-    weights = {
-        "Positive": 1,
-        "Neutral": 0,
-        "Negative": -1,
-    }
+    weights = {"Positive": 1, "Neutral": 0, "Negative": -1}
     compound = float(np.mean([weights[l] for l in labels]))
     return labels, compound
 
@@ -113,12 +105,11 @@ def advice_from_score(score: float) -> str:
         return "SELL"
     return "HOLD"
 
-
 # -----------------------------------------------------------------------------
 # 🔮  FORECASTING (Prophet)
 # -----------------------------------------------------------------------------
 
-@st.cache_data(ttl=12 * 60 * 60, show_spinner=False)
+@st.cache_data(ttl=43200, show_spinner=False)
 def prophet_forecast(symbol: str, days: int = 7):
     df = (
         yf.download(symbol, period="1y", progress=False)[["Close"]]
@@ -136,75 +127,61 @@ def prophet_forecast(symbol: str, days: int = 7):
     )
     return model, fcst.tail(days)
 
-
 # -----------------------------------------------------------------------------
-# 🖥️   MAIN UI
+# 🖥️  MAIN UI
 # -----------------------------------------------------------------------------
 
 def main() -> None:
-    st.title("📈 FinScope AI")
+    st.title("📈 FinScope AI")
     st.markdown(
-        "AI‑powered dashboard combining news sentiment, price history and short‑term forecasts."
+        "AI-powered dashboard combining news sentiment, price history, and short-term forecasts."
     )
     st.markdown("---")
 
-    # Sidebar – stock selection ---------------------------------------------
     with st.sidebar:
-        st.header("🔍 Stock Selection")
+        st.header("🔍 Stock Selection")
         default_list = get_ticker_list()
         choice = st.text_input(
-            "Company name or ticker (e.g. AAPL)", value=default_list[0] if default_list else "AAPL"
+            "Company name or ticker (e.g. AAPL)",
+            value=default_list[0] if default_list else "AAPL"
         ).strip().upper()
 
-        # Validate ticker pattern
         if not re.fullmatch(r"[A-Z.\-]{1,5}", choice):
             st.warning("Please enter a valid ticker symbol (1–5 capital letters).")
             st.stop()
 
-        period = st.selectbox("History period", ["1mo", "3mo", "6mo", "1y", "5y"], index=2)
+        period = st.selectbox(
+            "History period", ["1mo", "3mo", "6mo", "1y", "5y"], index=2
+        )
 
-    # Secrets gate -----------------------------------------------------------
     if "newsapi_key" not in st.secrets:
-        st.error("🔑  Add your NewsAPI key to Streamlit secrets to enable sentiment analysis.")
+        st.error("🔑 Add your NewsAPI key to Streamlit secrets to enable sentiment analysis.")
         st.stop()
 
     news_key: str = st.secrets["newsapi_key"]
 
-    # ---------------------------------------------------------------------
-    # DATA FETCHING
-    # ---------------------------------------------------------------------
     hist = load_price_history(choice, period)
     if hist.empty:
         st.error("No price data returned – please verify the ticker.")
         st.stop()
 
-    # Async news fetch
     with st.spinner("Fetching latest headlines …"):
         headlines = asyncio.run(fetch_news(choice, news_key))[:5]
 
-    # Sentiment scoring -----------------------------------------------------
     if headlines:
         labels, compound = score_sentiment(headlines)
         recommendation = advice_from_score(compound)
     else:
         labels, compound, recommendation = [], 0.0, "HOLD"
 
-    # KPI metrics -----------------------------------------------------------
-    col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
-    col_kpi1.metric("Avg sentiment", f"{compound:+.2f}")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Avg sentiment", f"{compound:+.2f}")
     day_change = (hist.Close.iloc[-1] - hist.Close.iloc[-2]) / hist.Close.iloc[-2] * 100
-    col_kpi2.metric("Price Δ 1‑day", f"{day_change:+.2f}%")
-    col_kpi3.metric("Advice", recommendation)
+    col2.metric("Price Δ 1-day", f"{day_change:+.2f}%")
+    col3.metric("Advice", recommendation)
 
-    # ---------------------------------------------------------------------
-    # LAYOUT – Tabs
-    # ---------------------------------------------------------------------
+    tab_news, tab_chart, tab_forecast = st.tabs(["📰 News", "📉 Chart", "🔮 7-day Forecast"])
 
-    tab_news, tab_chart, tab_forecast = st.tabs([
-        "📰 News", "📉 Chart", "🔮 7‑day Forecast",
-    ])
-
-    # ---------------- News tab -------------------------------------------
     with tab_news:
         st.subheader("Latest headlines")
         if not headlines:
@@ -213,7 +190,6 @@ def main() -> None:
             for h, lbl in zip(headlines, labels):
                 st.markdown(f"- **{h}** — *{lbl}*")
 
-    # ---------------- Chart tab ------------------------------------------
     with tab_chart:
         st.subheader(f"{choice} price history – {period}")
         fig = go.Figure(
@@ -231,8 +207,22 @@ def main() -> None:
         fig.update_layout(height=400, xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
-    # ---------------- Forecast tab ---------------------------------------
     with tab_forecast:
-        st.subheader("Prophet 7‑day forecast (experimental)")
+        st.subheader("Prophet 7-day forecast (experimental)")
         try:
             model, fcst = prophet_forecast(choice, 7)
+            st.dataframe(
+                fcst[["ds", "yhat", "yhat_lower", "yhat_upper"]]
+                .set_index("ds"),
+                use_container_width=True,
+                height=220,
+            )
+            st.plotly_chart(
+                plot_plotly(model, model.predict(model.make_future_dataframe(7))),
+                use_container_width=True,
+            )
+        except Exception as err:
+            st.error(f"Forecast failed: {err}")
+
+if __name__ == "__main__":
+    main()
