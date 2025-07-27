@@ -169,6 +169,7 @@ def main():
     # ---------- Tabs ----------
     tab_news, tab_chart, tab_intraday = st.tabs(["📰 News", "📉 Chart", "⏱️ Intraday"])
 
+    # ----- News tab -----
     with tab_news:
         st.subheader("Latest headlines")
         if not headlines:
@@ -177,6 +178,7 @@ def main():
             for hl, lbl in zip(headlines, labels):
                 st.markdown(f"- **{hl}** — *{lbl}*")
 
+    # ----- Chart tab -----
     with tab_chart:
         st.subheader(f"{ticker} price history – {period}")
         fig = go.Figure([
@@ -185,7 +187,8 @@ def main():
         fig.update_layout(height=400, xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
-        with tab_intraday:
+    # ----- Intraday tab -----
+    with tab_intraday:
         st.subheader("Intraday 1‑minute candles & entry signal")
         if refresh_intraday:
             load_intraday.clear()
@@ -231,7 +234,3 @@ def main():
     # ----- Footer disclaimer -----
     st.markdown("<hr style='margin-top:2em'>", unsafe_allow_html=True)
     st.markdown(DISCLAIMER_MD, unsafe_allow_html=True)
-
-
-if __name__ == "__main__":
-    main()
