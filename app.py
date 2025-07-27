@@ -1,5 +1,4 @@
 import re
-
 import httpx
 import numpy as np
 import pandas as pd
@@ -109,6 +108,7 @@ def advice_from_score(score: float) -> str:
 
 @st.cache_data(ttl=43200, show_spinner=False)
 def prophet_forecast(symbol: str, days: int = 7):
+    """Generate model and full forecast DataFrame for the past year + `days` ahead."""
     df = (
         yf.download(symbol, period="1y", progress=False)[["Close"]]
         .dropna()
@@ -123,7 +123,7 @@ def prophet_forecast(symbol: str, days: int = 7):
     fcst[["yhat", "yhat_lower", "yhat_upper"]] = np.exp(
         fcst[["yhat", "yhat_lower", "yhat_upper"]]
     )
-    return model, fcst.tail(days)
+    return model, df, fcst
 
 # -----------------------------------------------------------------------------
 # 🖥️  MAIN UI
@@ -136,6 +136,7 @@ def main() -> None:
     )
     st.markdown("---")
 
+    # Sidebar
     with st.sidebar:
         st.header("🔍 Stock Selection")
         default_list = get_ticker_list()
@@ -152,12 +153,13 @@ def main() -> None:
             "History period", ["1mo", "3mo", "6mo", "1y", "5y"], index=2
         )
 
+    # Secrets
     if "newsapi_key" not in st.secrets:
         st.error("🔑 Add your NewsAPI key to Streamlit secrets to enable sentiment analysis.")
         st.stop()
-
     news_key: str = st.secrets["newsapi_key"]
 
+    # Data fetching
     hist = load_price_history(choice, period)
     if hist.empty:
         st.error("No price data returned – please verify the ticker.")
@@ -172,14 +174,19 @@ def main() -> None:
     else:
         labels, compound, recommendation = [], 0.0, "HOLD"
 
+    # KPIs
     col1, col2, col3 = st.columns(3)
     col1.metric("Avg sentiment", f"{compound:+.2f}")
     day_change = (hist.Close.iloc[-1] - hist.Close.iloc[-2]) / hist.Close.iloc[-2] * 100
     col2.metric("Price Δ 1-day", f"{day_change:+.2f}%")
     col3.metric("Advice", recommendation)
 
-    tab_news, tab_chart, tab_forecast = st.tabs(["📰 News", "📉 Chart", "🔮 7-day Forecast"])
+    # Tabs
+    tab_news, tab_chart, tab_forecast = st.tabs([
+        "📰 News", "📉 Chart", "🔮 7-day Forecast",
+    ])
 
+    # News Tab
     with tab_news:
         st.subheader("Latest headlines")
         if not headlines:
@@ -188,6 +195,7 @@ def main() -> None:
             for h, lbl in zip(headlines, labels):
                 st.markdown(f"- **{h}** — *{lbl}*")
 
+    # Chart Tab
     with tab_chart:
         st.subheader(f"{choice} price history – {period}")
         fig = go.Figure(
@@ -205,22 +213,23 @@ def main() -> None:
         fig.update_layout(height=400, xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
+    # Forecast Tab
     with tab_forecast:
         st.subheader("Prophet 7-day forecast (experimental)")
         try:
-            model, fcst = prophet_forecast(choice, 7)
-            st.dataframe(
-                fcst[["ds", "yhat", "yhat_lower", "yhat_upper"]]
-                .set_index(["ds"]),
-                use_container_width=True,
-                height=220,
+            model, hist_df, full_fcst = prophet_forecast(choice, days=7)
+            # Display only the 7-day future window
+            fcst_display = (
+                full_fcst[["ds", "yhat", "yhat_lower", "yhat_upper"]]
+                .tail(7)
+                .assign(ds=lambda df: df["ds"].dt.date)
             )
-            st.plotly_chart(
-                plot_plotly(model, model.predict(model.make_future_dataframe(7))),
-                use_container_width=True,
-            )
+            st.dataframe(fcst_display, use_container_width=True, height=220)
+            # Plot full forecast plus history
+            st.plotly_chart(plot_plotly(model, full_fcst), use_container_width=True)
         except Exception as err:
             st.error(f"Forecast failed: {err}")
+
 
 if __name__ == "__main__":
     main()
