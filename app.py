@@ -1,61 +1,55 @@
 import re
-from datetime import datetime, timedelta
-
 import httpx
 import numpy as np
 import pandas as pd
 import streamlit as st
 import torch
 import yfinance as yf
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import plotly.graph_objects as go
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 # -----------------------------------------------------------------------------
-# 🎛️  CONFIG
+# 🎛️ CONFIG
 # -----------------------------------------------------------------------------
 
-st.set_page_config(
-    page_title="FinScope AI",
-    page_icon="📈",
-    layout="wide",
-)
+st.set_page_config(page_title="FinScope AI", page_icon="📈", layout="wide")
 
 # -----------------------------------------------------------------------------
-# ⚙️  HELPERS & CACHING
+# ⚙️ HELPERS & CACHING
 # -----------------------------------------------------------------------------
 
 @st.cache_resource(show_spinner=False, ttl=None)
 def get_model():
-    """Load FinBERT sentiment model (cached across sessions)."""
-    tokenizer = AutoTokenizer.from_pretrained("yiyanghkust/finbert-tone")
-    model = AutoModelForSequenceClassification.from_pretrained("yiyanghkust/finbert-tone")
-    return tokenizer, model
+    tok = AutoTokenizer.from_pretrained("yiyanghkust/finbert-tone")
+    mdl = AutoModelForSequenceClassification.from_pretrained("yiyanghkust/finbert-tone")
+    return tok, mdl
 
 
-def _clean_headline(h: str) -> str:
-    return re.sub(r"\s+-\s+[A-Za-z &]+$", "", h).strip()
+def _clean_headline(txt: str) -> str:
+    return re.sub(r"\s+-\s+[A-Za-z &]+$", "", txt).strip()
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def fetch_news(ticker: str, api_key: str) -> list[str]:
-    url = "https://newsapi.org/v2/everything"
-    params = {
-        "q": ticker,
-        "sortBy": "publishedAt",
-        "language": "en",
-        "pageSize": 20,
-        "apiKey": api_key,
-    }
-    r = httpx.get(url, params=params, timeout=10)
+def fetch_news(tkr: str, api_key: str) -> list[str]:
+    r = httpx.get(
+        "https://newsapi.org/v2/everything",
+        params={
+            "q": tkr,
+            "sortBy": "publishedAt",
+            "language": "en",
+            "pageSize": 20,
+            "apiKey": api_key,
+        },
+        timeout=10,
+    )
     r.raise_for_status()
     return [_clean_headline(a.get("title", "")) for a in r.json().get("articles", [])]
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_ticker_list() -> list[str]:
+def default_tickers() -> list[str]:
     import requests
     from bs4 import BeautifulSoup
-
     try:
         html = requests.get("https://www.fool.com/investing/", timeout=10).text
         soup = BeautifulSoup(html, "html.parser")
@@ -65,77 +59,57 @@ def get_ticker_list() -> list[str]:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def load_price_history(symbol: str, period: str = "6mo") -> pd.DataFrame:
+def load_history(symbol: str, period: str) -> pd.DataFrame:
     return yf.Ticker(symbol).history(period=period, auto_adjust=False)
 
 
 @st.cache_data(ttl=120, show_spinner=False)
 def load_intraday(symbol: str) -> pd.DataFrame:
-    """1‑minute candles for the current trading day (Yahoo)."""
     df = yf.download(symbol, interval="1m", period="1d", progress=False)
     if isinstance(df.columns, pd.MultiIndex):
-        # Flatten multi‑level columns that Yahoo returns when group_by="ticker"
         df.columns = df.columns.get_level_values(-1)
-    df = df.tz_localize(None)
-    return df
+    return df.tz_localize(None)
 
 # -----------------------------------------------------------------------------
-# 📈  SENTIMENT ANALYSIS
+# 📈 SENTIMENT FUNCTIONS
 # -----------------------------------------------------------------------------
 
-def score_sentiment(headlines: list[str]) -> tuple[list[str], float]:
-    tokenizer, model = get_model()
-    id2label = {int(k): v.lower() for k, v in model.config.id2label.items()}
+def score_sentiment(headlines: list[str]):
+    tok, mdl = get_model()
+    id2label = {int(k): v.lower() for k, v in mdl.config.id2label.items()}
     weights = {"positive": 1, "neutral": 0, "negative": -1}
-
-    inputs = tokenizer(headlines, return_tensors="pt", padding=True, truncation=True)
+    inputs = tok(headlines, return_tensors="pt", padding=True, truncation=True)
     with torch.no_grad():
-        probs = torch.softmax(model(**inputs).logits, dim=-1).numpy()
-
-    labels = [id2label[int(idx)] for idx in probs.argmax(axis=1)]
+        probs = torch.softmax(mdl(**inputs).logits, dim=-1).numpy()
+    labels = [id2label[int(i)] for i in probs.argmax(axis=1)]
     compound = float(np.mean([weights[l] for l in labels])) if labels else 0.0
     return [l.capitalize() for l in labels], compound
 
 
-def advice_from_score(score: float) -> str:
-    return "BUY" if score >= 0.5 else "SELL" if score <= -0.5 else "HOLD"
+def advice_from(compound: float) -> str:
+    return "BUY" if compound >= 0.5 else "SELL" if compound <= -0.5 else "HOLD"
 
 # -----------------------------------------------------------------------------
-# 🔄  TECHNICAL INDICATORS (INTRADAY)
+# 🔄 INTRADAY TECHNICALS
 # -----------------------------------------------------------------------------
 
-def compute_intraday_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """Add SMA‑20, RSI‑14 and Entry columns to an intraday DataFrame.
-
-    Handles erratic column casing from yfinance by searching for any column
-    whose lowercase name equals "close".
-    """
+def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
-
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(-1)
-
-    # Find the CLOSE column case‑insensitively, then standardise its name
     close_col = next((c for c in df.columns if c.lower() == "close"), None)
     if close_col is None:
-        # Bail gracefully – caller will detect Entry column absence
         return pd.DataFrame()
     if close_col != "Close":
         df = df.rename(columns={close_col: "Close"})
-
-    # Calculate indicators
     df = df.copy()
     df["SMA_20"] = df["Close"].rolling(20).mean()
-
     delta = df["Close"].diff()
-    up = delta.clip(lower=0)
-    down = -delta.clip(upper=0)
-    gain = up.rolling(14).mean()
-    loss = down.rolling(14).mean().replace(0, np.nan)
+    gain = delta.clip(lower=0).rolling(14).mean()
+    loss = (-delta.clip(upper=0)).rolling(14).mean().replace(0, np.nan)
     rs = gain / loss
     df["RSI_14"] = 100 - 100 / (1 + rs)
-
     df["Entry"] = (
         (df["Close"].shift(1) < df["SMA_20"].shift(1)) &
         (df["Close"] > df["SMA_20"]) &
@@ -144,67 +118,53 @@ def compute_intraday_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 # -----------------------------------------------------------------------------
-# 🖥️  MAIN UI
+# 🖥️ MAIN APP
 # -----------------------------------------------------------------------------
 
-def main() -> None:
+def main():
     st.title("📈 FinScope AI")
     st.markdown("AI‑powered dashboard: news sentiment, price history & intraday signals.")
     st.markdown("---")
 
+    # ---------- Sidebar ----------
     with st.sidebar:
         st.header("🔍 Stock Selection")
-        defaults = get_ticker_list()
-        ticker = st.text_input("Ticker (e.g. AAPL)", value=defaults[0] if defaults else "AAPL").strip().upper()
+        ticker_defaults = default_tickers()
+        ticker = st.text_input("Ticker (e.g. AAPL)", value=ticker_defaults[0] if ticker_defaults else "AAPL").strip().upper()
         if not re.fullmatch(r"[A-Z.\-]{1,5}", ticker):
             st.warning("Enter a valid ticker (1‑5 capital letters).")
             st.stop()
-        period = st.selectbox("History period", ["1mo", "3mo", "6mo", "1y", "5y"], 2)
-        refresh = st.button("🔄 Refresh intraday")
+        period = st.selectbox("History period", ["1mo", "3mo", "6mo", "1y", "5y"], index=2)
+        refresh_intraday = st.button("🔄 Refresh intraday")
 
-    # Secrets
+    # ---------- API key ----------
     if "newsapi_key" not in st.secrets:
         st.error("🔑 Add your NewsAPI key to Streamlit secrets to enable sentiment analysis.")
         st.stop()
     news_key = st.secrets["newsapi_key"]
 
-    # Price history
-    hist = load_price_history(ticker, period)
+    # ---------- Price History ----------
+    hist = load_history(ticker, period)
     if hist.empty:
         st.error("No price data returned – verify the ticker.")
         st.stop()
 
-    # Headlines & sentiment
-    with st.spinner("Fetching headlines …"):
-        headlines = fetch_news(ticker, news_key)[:5]
+    # ---------- Sentiment ----------
+    headlines = fetch_news(ticker, news_key)[:5]
     labels, compound = score_sentiment(headlines) if headlines else ([], 0.0)
-    rec = advice_from_score(compound)
+    rec = advice_from(compound)
 
-        # KPI --------------------------------------------------------------
+    # ---------- KPIs ----------
     k1, k2, k3 = st.columns(3)
-    k1.metric(
-        "Avg sentiment",
-        f"{compound:+.2f}",
-        help="Compound score from –1 (all negative) to +1 (all positive). Each headline is mapped: Positive=+1, Neutral=0, Negative=–1; we average the five most‑recent headlines."
-    )
-
+    k1.metric("Avg sentiment", f"{compound:+.2f}", help="–1 (all negative) … +1 (all positive). Based on last 5 headlines.")
     if len(hist) > 1:
-        day_change = (hist.Close.iloc[-1] - hist.Close.iloc[-2]) / hist.Close.iloc[-2] * 100
-        k2.metric(
-            "Price Δ 1‑day",
-            f"{day_change:+.2f}%",
-            help="Percentage change between the latest close and the previous session’s close."
-        )
+        dchg = (hist.Close.iloc[-1] - hist.Close.iloc[-2]) / hist.Close.iloc[-2] * 100
+        k2.metric("Price Δ 1‑day", f"{dchg:+.2f}%", help="Close‑to‑close percent change.")
     else:
-        k2.metric("Price Δ 1‑day", "–", help="Not enough historical data for day‑over‑day change.")
+        k2.metric("Price Δ 1‑day", "–")
+    k3.metric("Advice", rec, help="BUY if sentiment ≥ +0.5, SELL if ≤ –0.5, else HOLD.")
 
-    k3.metric(
-        "Advice",
-        rec,
-        help="Rule‑based: BUY if avg sentiment ≥ +0.5, SELL if ≤ –0.5, else HOLD."
-    )
-
-    # Tabs -------------------------------------------------------------
+    # ---------- Tabs ----------
     tab_news, tab_chart, tab_intraday = st.tabs(["📰 News", "📉 Chart", "⏱️ Intraday"])
 
     with tab_news:
@@ -217,67 +177,18 @@ def main() -> None:
 
     with tab_chart:
         st.subheader(f"{ticker} price history – {period}")
-        fig = go.Figure([
-            go.Candlestick(x=hist.index, open=hist.Open, high=hist.High, low=hist.Low, close=hist.Close)
-        ])
+        fig = go.Figure([go.Candlestick(x=hist.index, open=hist.Open, high=hist.High, low=hist.Low, close=hist.Close)])
         fig.update_layout(height=400, xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
     with tab_intraday:
         st.subheader("Intraday 1‑minute candles & entry signal")
-        if refresh:
-            load_intraday.clear()  # invalidate cache on demand
-        intraday_df = load_intraday(ticker)
-        if intraday_df.empty:
-            st.write("Intraday data not available outside market hours.")
+        if refresh_intraday:
+            load_intraday.clear()
+        intra_raw = load_intraday(ticker)
+        if intra_raw.empty:
+            st.info("Intraday data unavailable (market closed?).")
         else:
-            indf = compute_intraday_indicators(intraday_df)
+            indf = compute_indicators(intra_raw)
             if indf.empty or "Close" not in indf.columns:
-                st.warning("Unable to compute intraday indicators for this symbol right now.")
-            else:
-                last = indf.iloc[-1]
-                entry_text = "✅ Entry signal!" if last["Entry"] else "No entry signal currently"
-                st.write(
-                    f"**Current price:** {last['Close']:.2f} | "
-                    f"SMA20: {last['SMA_20']:.2f} | "
-                    f"RSI14: {last['RSI_14']:.1f}"
-                )
-                st.success(entry_text) if last["Entry"] else st.info(entry_text)
-
-                fig2 = go.Figure()
-                fig2.add_trace(go.Scatter(x=indf.index, y=indf["Close"], mode="lines", name="Close"))
-                fig2.add_trace(go.Scatter(x=indf.index, y=indf["SMA_20"], mode="lines", name="SMA 20"))
-                entry_df = indf[indf["Entry"]]
-                if not entry_df.empty:
-                    fig2.add_trace(
-                        go.Scatter(
-                            x=entry_df.index,
-                            y=entry_df["Close"],
-                            mode="markers",
-                            marker_symbol="triangle-up",
-                            marker_color="green",
-                            marker_size=10,
-                            name="Entry",
-                        )
-                    )
-                fig2.update_layout(height=400, xaxis_title="Time", yaxis_title="Price")
-                fig2.update_layout(height=400, xaxis_title="Time", yaxis_title="Price")
-                                st.plotly_chart(fig2, use_container_width=True)
-
-    # ---------------- Disclaimer ----------------
-    st.markdown(
-        "<hr style='margin-top:2em'>"
-        "<small><em>Disclaimer: FinScope AI is provided for informational and educational purposes only and 
-"
-        "should not be construed as financial advice. Trading and investing involve substantial risk, and you 
-"
-        "should consult a qualified financial professional before making any investment decisions. The creators 
-"
-        "and hosts of this application assume no liability for any losses or damages arising from its use.</em></small>",
-        unsafe_allow_html=True,
-    )
-
-
-if __name__ == "__main__":
-    main()
-    main()
+                st.warning("Indicators could not be computed.
