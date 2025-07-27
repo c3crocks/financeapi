@@ -247,7 +247,6 @@ def main() -> None:
                 )
             )
             fig_fcst.update_layout(height=400, xaxis_title="Date", yaxis_title="Price (USD)")
-            st.plotly_chart(fig_fcst, use_container_width=True)")
             st.plotly_chart(fig_fcst, use_container_width=True)
 
         except Exception as err:
