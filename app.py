@@ -12,39 +12,11 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 # 🔒 Pop‑up Disclaimer (must accept before app runs)
 # -----------------------------------------------------------------------------
 
-DISCLAIMER_MD = """**CRITICAL RISK DISCLAIMER**
+# Persistent footer disclaimer text
+DISCLAIMER_MD = """**CRITICAL RISK DISCLAIMER**  \
+FinScope AI is an *experimental* analytics tool provided **“as‑is”**. Nothing here constitutes financial advice; past performance does not guarantee future results. Trading involves substantial risk of loss. Data, headlines and model outputs may be delayed, inaccurate or unavailable. By using this app you accept full responsibility for your decisions and hold the developers and hosts harmless for any losses."""
 
-FinScope AI is an *experimental* analytics tool. All market data, headlines, and model outputs are provided **“as‑is”** without any warranty of accuracy, completeness, or timeliness.
 
-* **Not financial advice —** Nothing on this site constitutes investment, trading, or other professional advice.
-* **No performance guarantees —** Past results, back‑tests, or model forecasts do **not** guarantee future returns.
-* **Market risk —** Trading equities, options, futures, or crypto involves the risk of substantial loss. You may lose more than your initial investment.
-* **Data & model errors —** News feeds, price quotes, and technical calculations may be delayed, incorrect, or unavailable; ML sentiment models can misclassify.
-* **Third‑party content —** Links and headlines are the property of their respective publishers; FinScope AI neither endorses nor verifies them.
-
-By using this application you acknowledge that **you** bear full responsibility for your trading decisions and agree to hold the developers, contributors, and hosting providers **harmless from any direct or consequential losses**. Always consult a licensed financial professional before acting on any information presented here."""
-
-# ---- Disclaimer overlay ----
-if not st.session_state.get("disclaimer_accepted", False):
-    # global overlay style
-    st.markdown(
-        """
-        <style>
-         .fs-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:10000;display:flex;align-items:center;justify-content:center;}
-         .fs-card{background:#fff;color:#000;padding:2rem;max-width:800px;width:92%;border-radius:8px;max-height:85vh;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);} 
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    # container hosts disclaimer text + button
-    with st.container():
-        st.markdown("<div class='fs-backdrop'><div class='fs-card'>", unsafe_allow_html=True)
-        st.markdown(DISCLAIMER_MD)
-        if st.button("I Acknowledge and Agree", key="fs_agree_btn"):
-            st.session_state.disclaimer_accepted = True
-            st.experimental_rerun()
-        st.markdown("</div></div>", unsafe_allow_html=True)
-    st.stop()
 
 # -----------------------------------------------------------------------------
 # ⚙️ HELPERS & CACHING
