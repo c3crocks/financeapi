@@ -262,8 +262,22 @@ def main() -> None:
                     )
                 fig2.update_layout(height=400, xaxis_title="Time", yaxis_title="Price")
                 fig2.update_layout(height=400, xaxis_title="Time", yaxis_title="Price")
-                st.plotly_chart(fig2, use_container_width=True)
+                                st.plotly_chart(fig2, use_container_width=True)
+
+    # ---------------- Disclaimer ----------------
+    st.markdown(
+        "<hr style='margin-top:2em'>"
+        "<small><em>Disclaimer: FinScope AI is provided for informational and educational purposes only and 
+"
+        "should not be construed as financial advice. Trading and investing involve substantial risk, and you 
+"
+        "should consult a qualified financial professional before making any investment decisions. The creators 
+"
+        "and hosts of this application assume no liability for any losses or damages arising from its use.</em></small>",
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":
+    main()
     main()
