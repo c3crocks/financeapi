@@ -9,50 +9,56 @@ import plotly.graph_objects as go
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 # -----------------------------------------------------------------------------
-# 🎛️ CONFIG
-# -----------------------------------------------------------------------------
-
-st.set_page_config(page_title="FinScope AI", page_icon="📈", layout="wide")
-
-# -----------------------------------------------------------------------------
 # 🔒 Pop‑up Disclaimer (must accept before app runs)
 # -----------------------------------------------------------------------------
 
 DISCLAIMER_MD = (
-    "**CRITICAL RISK DISCLAIMER**  \n"
-    "FinScope AI is an *experimental* analytics tool. All market data, headlines, and model outputs are provided **“as‑is”** without any warranty of accuracy, completeness, or timeliness.  \n\n"
-    "* **Not financial advice —** Nothing on this site constitutes investment, trading, or other professional advice.  \n"
-    "* **No performance guarantees —** Past results, back‑tests, or model forecasts do **not** guarantee future returns.  \n"
-    "* **Market risk —** Trading equities, options, futures, or crypto involves the risk of substantial loss. You may lose more than your initial investment.  \n"
-    "* **Data & model errors —** News feeds, price quotes, and technical calculations may be delayed, incorrect, or unavailable; ML sentiment models can misclassify.  \n"
-    "* **Third‑party content —** Links and headlines are the property of their respective publishers; FinScope AI neither endorses nor verifies them.  \n\n"
+    "**CRITICAL RISK DISCLAIMER**
+
+"
+    "FinScope AI is an *experimental* analytics tool. All market data, headlines, and model outputs are provided **“as‑is”** without any warranty of accuracy, completeness, or timeliness.
+
+"
+    "* **Not financial advice —** Nothing on this site constitutes investment, trading, or other professional advice.
+"
+    "* **No performance guarantees —** Past results, back‑tests, or model forecasts do **not** guarantee future returns.
+"
+    "* **Market risk —** Trading equities, options, futures, or crypto involves the risk of substantial loss. You may lose more than your initial investment.
+"
+    "* **Data & model errors —** News feeds, price quotes, and technical calculations may be delayed, incorrect, or unavailable; ML sentiment models can misclassify.
+"
+    "* **Third‑party content —** Links and headlines are the property of their respective publishers; FinScope AI neither endorses nor verifies them.
+
+"
     "By using this application you acknowledge that **you** bear full responsibility for your trading decisions and agree to hold the developers, contributors, and hosting providers **harmless from any direct or consequential losses**. Always consult a licensed financial professional before acting on any information presented here."
 )
 
-if "disclaimer_accepted" not in st.session_state:
-    st.session_state.disclaimer_accepted = False
-
-if not st.session_state.disclaimer_accepted:
-    css_html = (
-        "<style>"
-        ".fs-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);"
-        "display:flex;align-items:center;justify-content:center;z-index:9999;}"
-        ".fs-box{background:#fff;color:#000;padding:2rem;width:92%;max-width:800px;"
-        "border-radius:8px;max-height:80vh;overflow-y:auto;}"
-        "</style>"
-        "<div class='fs-overlay'><div class='fs-box'>" + DISCLAIMER_MD + "</div></div>"
+if not st.session_state.get("disclaimer_accepted", False):
+    # CSS overlay
+    st.markdown(
+        """
+        <style>
+        .fs-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:10000;}
+        .fs-inner{background:#fff;color:#000;padding:2rem;max-width:800px;width:90%;border-radius:8px;max-height:85vh;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);} 
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
-    # Inject CSS & overlay
-    st.markdown(css_html, unsafe_allow_html=True)
-    # Acknowledge button (normal Streamlit button)
-    if st.button("I Acknowledge and Agree", key="accept_disclaimer"):
-        st.session_state.disclaimer_accepted = True
-        st.experimental_rerun()
-    st.stop()
+    # Use a transparent container to host markdown + button so they render inside overlay order
+    ov = st.container()
+    with ov:
+        st.markdown("""<div class='fs-overlay'><div class='fs-inner'>""", unsafe_allow_html=True)
+        st.markdown(DISCLAIMER_MD)
+        agree = st.button("I Acknowledge and Agree", key="agree_btn")
+        st.markdown("""</div></div>""", unsafe_allow_html=True)
+        if agree:
+            st.session_state.disclaimer_accepted = True
+            st.experimental_rerun()
     st.stop()
 
 # -----------------------------------------------------------------------------
 # ⚙️ HELPERS & CACHING
+# ----------------------------------------------------------------------------- & CACHING
 # -----------------------------------------------------------------------------
 
 @st.cache_resource(show_spinner=False, ttl=None)
