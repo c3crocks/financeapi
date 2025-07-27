@@ -75,15 +75,23 @@ def load_price_history(symbol: str, period: str = "6mo") -> pd.DataFrame:
 # -----------------------------------------------------------------------------
 
 def score_sentiment(headlines: list[str]) -> tuple[list[str], float]:
-    sentiments_map = {0: "Negative", 1: "Neutral", 2: "Positive"}
-    weights = {"Positive": 1, "Neutral": 0, "Negative": -1}
+    """Infer per‑headline sentiment using the model's **own** label map
+    to avoid hard‑coding the index order (different FinBERT forks swap
+    Positive / Negative).
+    Returns the list of labels and a compound (+1,0,‑1) mean score.
+    """
     tokenizer, model = get_model()
+    id2label = model.config.id2label  # e.g. {0: 'neutral', 1: 'positive', 2: 'negative'}
+    weights = {"positive": 1, "neutral": 0, "negative": -1}
+
     inputs = tokenizer(headlines, return_tensors="pt", padding=True, truncation=True)
     with torch.no_grad():
         probs = torch.softmax(model(**inputs).logits, dim=-1).numpy()
-    labels = [sentiments_map[idx] for idx in probs.argmax(axis=1)]
+
+    labels = [id2label[int(idx)].lower() for idx in probs.argmax(axis=1)]
     compound = float(np.mean([weights[l] for l in labels]))
-    return labels, compound
+    # Capitalise first letter for display
+    return [l.capitalize() for l in labels], compound
 
 
 def advice_from_score(score: float) -> str:
@@ -99,7 +107,7 @@ def advice_from_score(score: float) -> str:
 
 def main() -> None:
     st.title("📈 FinScope AI")
-    st.markdown("AI-powered dashboard combining news sentiment and price history.")
+    st.markdown("AI‑powered dashboard combining news sentiment and price history.")
     st.markdown("---")
 
     # Sidebar
@@ -111,7 +119,7 @@ def main() -> None:
             value=defaults[0] if defaults else "AAPL",
         ).strip().upper()
         if not re.fullmatch(r"[A-Z.\-]{1,5}", ticker):
-            st.warning("Enter a valid ticker (1-5 capital letters).")
+            st.warning("Enter a valid ticker (1‑5 capital letters).")
             st.stop()
         period = st.selectbox("History period", ["1mo", "3mo", "6mo", "1y", "5y"], index=2)
 
@@ -138,7 +146,7 @@ def main() -> None:
     k1, k2, k3 = st.columns(3)
     k1.metric("Avg sentiment", f"{compound:+.2f}")
     day_change = (hist.Close.iloc[-1] - hist.Close.iloc[-2]) / hist.Close.iloc[-2] * 100
-    k2.metric("Price Δ 1-day", f"{day_change:+.2f}%")
+    k2.metric("Price Δ 1‑day", f"{day_change:+.2f}%")
     k3.metric("Advice", recommendation)
 
     # Tabs
