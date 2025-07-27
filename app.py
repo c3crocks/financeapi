@@ -220,4 +220,22 @@ def main() -> None:
             # plot
             fig2 = go.Figure()
             fig2.add_trace(go.Scatter(x=indf.index, y=indf["Close"], mode="lines", name="Close"))
-            fig2.add
+            fig2.add_trace(go.Scatter(x=indf.index, y=indf["SMA_20"], mode="lines", name="SMA 20"))
+            entry_df = indf[indf["Entry"]]
+            fig2.add_trace(
+                go.Scatter(
+                    x=entry_df.index,
+                    y=entry_df["Close"],
+                    mode="markers",
+                    marker_symbol="triangle-up",
+                    marker_color="green",
+                    marker_size=10,
+                    name="Entry",
+                )
+            )
+            fig2.update_layout(height=400, xaxis_title="Time", yaxis_title="Price")
+            st.plotly_chart(fig2, use_container_width=True)
+
+
+if __name__ == "__main__":
+    main()
