@@ -15,58 +15,56 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 st.set_page_config(page_title="FinScope AI", page_icon="📈", layout="wide")
 
 # -----------------------------------------------------------------------------
-# 🔒 Pop‑up Disclaimer (must accept before app runs)
+# 🔒 Pop-up Risk Disclaimer
 # -----------------------------------------------------------------------------
+DISCLAIMER_MD = """
+**CRITICAL RISK DISCLAIMER**
 
-DISCLAIMER_MD = (
-    "**CRITICAL RISK DISCLAIMER**  \n"
-    "FinScope AI is an *experimental* analytics tool. All market data, headlines, and model outputs are provided **“as‑is”** without any warranty of accuracy, completeness, or timeliness.  \n\n"
-    "* **Not financial advice —** Nothing on this site constitutes investment, trading, or other professional advice.  \n"
-    "* **No performance guarantees —** Past results, back‑tests, or model forecasts do **not** guarantee future returns.  \n"
-    "* **Market risk —** Trading equities, options, futures, or crypto involves the risk of substantial loss. You may lose more than your initial investment.  \n"
-    "* **Data & model errors —** News feeds, price quotes, and technical calculations may be delayed, incorrect, or unavailable; ML sentiment models can misclassify.  \n"
-    "* **Third‑party content —** Links and headlines are the property of their respective publishers; FinScope AI neither endorses nor verifies them.  \n\n"
-    "By using this application you acknowledge that **you** bear full responsibility for your trading decisions and agree to hold the developers, contributors, and hosting providers **harmless from any direct or consequential losses**. Always consult a licensed financial professional before acting on any information presented here."
-)
+FinScope AI is an *experimental* analytics tool. All data and model outputs are provided **“as-is”** without warranty.
 
-if "disclaimer_accepted" not in st.session_state:
-    st.session_state.disclaimer_accepted = False
+* **Not financial advice** – Nothing here constitutes investment or trading advice.  
+* **No performance guarantees** – Past results or forecasts do **not** guarantee future returns.  
+* **Market risk** – Trading can result in substantial losses, including more than your initial investment.  
+* **Data / model errors** – Quotes, headlines, and calculations may be delayed, incorrect, or unavailable.  
+* **Third-party content** – Headlines belong to their publishers; FinScope AI neither verifies nor endorses them.
 
-if not st.session_state.disclaimer_accepted:
-    overlay = st.empty()
-    with overlay.container():
-        st.markdown(
-            f"""
-            <style>
-            .fs-overlay {{
-                position: fixed;
-                top: 0; left: 0;
-                width: 100%; height: 100%;
-                background: rgba(0,0,0,0.65);
-                display: flex; justify-content: center; align-items: center;
-                z-index: 9999;
-            }}
-            .fs-box {{
-                background:#fff; padding:2rem; max-width:800px; width:90%;
-                border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.25);
-                overflow-y:auto; max-height:80vh;
-            }}
-            </style>
-            <div class="fs-overlay">
-              <div class="fs-box">
-                {DISCLAIMER_MD}
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown("
-")  # spacing for button alignment
-        if st.button("I Acknowledge and Agree", key="accept_disclaimer"):
-            st.session_state.disclaimer_accepted = True
-            overlay.empty()
+By using this application you accept full responsibility for your trading decisions and hold the developers and hosts **harmless** from any losses.
+"""
+
+if not st.session_state.get("disclaimer_accepted", False):
+    # Draw a full-screen HTML overlay
+    st.markdown(
+        f"""
+        <style>
+        .fs-overlay {{
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.65);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 9999;
+        }}
+        .fs-box {{
+            background: #fff; color:#000; padding:2rem; width:90%; max-width:800px;
+            border-radius:8px; max-height:80vh; overflow-y:auto;
+        }}
+        </style>
+        <div class="fs-overlay">
+          <div class="fs-box">{DISCLAIMER_MD}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Accept button (rendered below the HTML so it’s clickable)
+    if st.button("I acknowledge and agree"):
+        st.session_state.disclaimer_accepted = True
+        # Safely trigger a rerun if this Streamlit version supports it
+        if hasattr(st, "experimental_rerun"):
             st.experimental_rerun()
-    st.stop()
+        else:
+            st.write("Please refresh the page to continue.")
+            st.stop()
+
+    # Halt the rest of the script until the user accepts
     st.stop()
 
 # -----------------------------------------------------------------------------
