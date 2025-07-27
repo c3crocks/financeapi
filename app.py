@@ -234,3 +234,7 @@ def main():
     # ----- Footer disclaimer -----
     st.markdown("<hr style='margin-top:2em'>", unsafe_allow_html=True)
     st.markdown(DISCLAIMER_MD, unsafe_allow_html=True)
+
+
+if __name__ == "__main__":
+    main()
