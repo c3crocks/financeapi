@@ -33,11 +33,13 @@ if "disclaimer_accepted" not in st.session_state:
     st.session_state.disclaimer_accepted = False
 
 if not st.session_state.disclaimer_accepted:
-    with st.modal("Risk Disclaimer – Please Read"):
+    placeholder = st.empty()
+    with placeholder.container():
         st.markdown(DISCLAIMER_MD)
         if st.button("I Acknowledge and Agree"):
             st.session_state.disclaimer_accepted = True
-    # Halt the script until user accepts
+            placeholder.empty()
+            st.experimental_rerun()
     st.stop()
 
 # -----------------------------------------------------------------------------
