@@ -25,25 +25,25 @@ FinScope AI is an *experimental* analytics tool. All market data, headlines, and
 By using this application you acknowledge that **you** bear full responsibility for your trading decisions and agree to hold the developers, contributors, and hosting providers **harmless from any direct or consequential losses**. Always consult a licensed financial professional before acting on any information presented here."""
 
 # ---- Disclaimer overlay ----
-# URL param fallback (after refresh)
-if st.query_params.get("accept") == ["1"]:
-    st.session_state.disclaimer_accepted = True
-
 if not st.session_state.get("disclaimer_accepted", False):
-        overlay_html = f"""
-<style>
-.fs-overlay{{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.65);z-index:10000;}}
-.fs-inner{{background:#fff;color:#000;padding:2rem;max-width:800px;width:90%;border-radius:8px;max-height:85vh;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);}}
-.fs-btn{{display:inline-block;margin-top:1.5rem;padding:0.6rem 1.4rem;background:#1f77b4;color:#fff;border-radius:4px;text-decoration:none;font-weight:600;}}
-</style>
-<div class="fs-overlay">
-  <div class="fs-inner">
-    {DISCLAIMER_MD}
-    <center><a class="fs-btn" href="?accept=1">I Acknowledge and Agree</a></center>
-  </div>
-</div>
-"""
-    st.markdown(overlay_html, unsafe_allow_html=True)
+    # global overlay style
+    st.markdown(
+        """
+        <style>
+         .fs-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:10000;display:flex;align-items:center;justify-content:center;}
+         .fs-card{background:#fff;color:#000;padding:2rem;max-width:800px;width:92%;border-radius:8px;max-height:85vh;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);} 
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    # container hosts disclaimer text + button
+    with st.container():
+        st.markdown("<div class='fs-backdrop'><div class='fs-card'>", unsafe_allow_html=True)
+        st.markdown(DISCLAIMER_MD)
+        if st.button("I Acknowledge and Agree", key="fs_agree_btn"):
+            st.session_state.disclaimer_accepted = True
+            st.experimental_rerun()
+        st.markdown("</div></div>", unsafe_allow_html=True)
     st.stop()
 
 # -----------------------------------------------------------------------------
