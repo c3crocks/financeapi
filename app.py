@@ -182,11 +182,23 @@ def main() -> None:
 
     # KPI
     k1, k2, k3 = st.columns(3)
-    k1.metric("Avg sentiment", f"{compound:+.2f}")
+        k1.metric(
+        "Avg sentiment",
+        f"{compound:+.2f}",
+        help="Compound score from –1 (all negative) to +1 (all positive). Each headline: Positive=+1, Neutral=0, Negative=–1; we average the five most‑recent headlines."
+    )
     if len(hist) > 1:
         day_change = (hist.Close.iloc[-1] - hist.Close.iloc[-2]) / hist.Close.iloc[-2] * 100
-        k2.metric("Price Δ 1‑day", f"{day_change:+.2f}%")
-    k3.metric("Advice", rec)
+                k2.metric(
+            "Price Δ 1‑day",
+            f"{day_change:+.2f}%",
+            help="Percentage change between the latest close and the previous session’s close."
+        )
+        k3.metric(
+        "Advice",
+        rec,
+        help="Rule‑based: BUY if avg sentiment ≥ +0.5, SELL if ≤ –0.5, else HOLD."
+    )
 
     # Tabs
     tab_news, tab_chart, tab_intraday = st.tabs(["📰 News", "📉 Chart", "⏱️ Intraday"])
