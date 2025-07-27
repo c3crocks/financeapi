@@ -215,7 +215,7 @@ def main() -> None:
         if intraday_df.empty:
             st.write("Intraday data not available outside market hours.")
         else:
-                        indf = compute_intraday_indicators(intraday_df)
+            indf = compute_intraday_indicators(intraday_df)
             if indf.empty or "Close" not in indf.columns:
                 st.warning("Unable to compute intraday indicators for this symbol right now.")
             else:
@@ -245,8 +245,8 @@ def main() -> None:
                         )
                     )
                 fig2.update_layout(height=400, xaxis_title="Time", yaxis_title="Price")
-                st.plotly_chart(fig2, use_container_width=True)(height=400, xaxis_title="Time", yaxis_title="Price")
-            st.plotly_chart(fig2, use_container_width=True)
+                fig2.update_layout(height=400, xaxis_title="Time", yaxis_title="Price")
+                st.plotly_chart(fig2, use_container_width=True)
 
 
 if __name__ == "__main__":
