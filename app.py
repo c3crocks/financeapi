@@ -105,31 +105,35 @@ def advice_from_score(score: float) -> str:
 # -----------------------------------------------------------------------------
 
 def compute_intraday_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute SMA‑20, RSI‑14 and a boolean Entry flag.
+    """Add SMA‑20, RSI‑14 and Entry columns to an intraday DataFrame.
 
-    *Column name quirks*
-    YFinance sometimes returns lowercase (`close`) and sometimes title‑case
-    (`Close`). We normalise to title‑case so subsequent math is safe.
+    Handles erratic column casing from yfinance by searching for any column
+    whose lowercase name equals "close".
     """
+    if df.empty:
+        return df
+
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(-1)
 
-    # Normalise column names to title‑case (close → Close)
-    df.columns = [c.title() for c in df.columns]
+    # Find the CLOSE column case‑insensitively, then standardise its name
+    close_col = next((c for c in df.columns if c.lower() == "close"), None)
+    if close_col is None:
+        # Bail gracefully – caller will detect Entry column absence
+        return pd.DataFrame()
+    if close_col != "Close":
+        df = df.rename(columns={close_col: "Close"})
 
-    # Ensure required column exists
-    if "Close" not in df.columns:
-        raise ValueError("Intraday data lacks 'Close' column after normalisation")
-    if "Close" not in df.columns:
-        raise ValueError("Intraday DataFrame missing 'Close' column")
-
+    # Calculate indicators
     df = df.copy()
     df["SMA_20"] = df["Close"].rolling(20).mean()
 
     delta = df["Close"].diff()
-    gain = delta.clip(lower=0).rolling(14).mean()
-    loss = (-delta.clip(upper=0)).rolling(14).mean()
-    rs = gain / loss.replace(0, np.nan)
+    up = delta.clip(lower=0)
+    down = -delta.clip(upper=0)
+    gain = up.rolling(14).mean()
+    loss = down.rolling(14).mean().replace(0, np.nan)
+    rs = gain / loss
     df["RSI_14"] = 100 - 100 / (1 + rs)
 
     df["Entry"] = (
