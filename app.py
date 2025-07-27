@@ -189,7 +189,7 @@ def main():
         if intra_raw.empty:
             st.info("Intraday data unavailable (market closed?).")
         else:
-                        indf = compute_indicators(intra_raw)
+            indf = compute_indicators(intra_raw)
             if indf.empty or "Close" not in indf.columns:
                 st.warning("Indicators could not be computed for this symbol at the moment.")
             else:
