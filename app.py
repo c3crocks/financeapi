@@ -213,7 +213,6 @@ def main() -> None:
             for h, lbl in zip(headlines, labels):
                 st.markdown(f"- **{h}** — *{lbl}*")
 
-    
     # ---------------- Chart tab ------------------------------------------
     with tab_chart:
         st.subheader(f"{choice} price history – {period}")
@@ -236,4 +235,4 @@ def main() -> None:
     with tab_forecast:
         st.subheader("Prophet 7‑day forecast (experimental)")
         try:
-            model, fcst = prophet_forecast
+            model, fcst = prophet_forecast(choice, 7)
